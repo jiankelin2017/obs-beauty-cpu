@@ -1,0 +1,22 @@
+[nama] [region] -> FUAI_NewFaceProcessorResult / NewImageView
+[nama] [region] <- result=0000022BEEDEEC30 view=00000229DE833880
+[nama] [region] -> SetMaxFaces(2)
+[nama] [region] -> SetDetectMode(0)
+[nama] [region] -> SetUseFaceLandmark(0)  <- 2.1.1：关关键点，皮肤分割不依赖它
+[nama] [region] -> SetUseHeadSegmenter(0)
+[nama] [region] -> SetUseHairSegmenter(0)
+[nama] [region] -> SetUseSkinSeg(1)
+[nama] [region] ensureReady 完成
+[nama] [region] VEH 已安装
+[nama] [region] -> ImageViewInit(1074x604 stride=4296 buf=000002298E707060)
+[nama] [region] -> FaceProcessorProcess2Result
+[nama] [region] <- FaceProcessorProcess2Result
+[nama] [region] -> FaceProcessorGetNumFromResult
+[nama] [region] <- faces=0（关键点已关，恒 0）
+[nama] [region] -> FaceProcessorGetSkinSegResult
+[nama] [region] extra 被写到下标 5（6 个 int，缓冲 256）
+[nama] [region] <- GetSkinSegResult r=1 ptr=0000022991DF8040 192x256
+[nama] [region] -> ImageViewInit(1074x604 stride=4296 buf=000002298E707060)
+[nama] [region] -> FaceProcessorProcess2Result
+[nama] [region][VEH] 异常 code=0xC0000005 addr=00007FFD4461B607 module=C:\Program Files\obs-studio\obs-plugins\64bit\obs-nama-beauty\fuai.dll
+[nama] [region] Process2Result 抛访问违例

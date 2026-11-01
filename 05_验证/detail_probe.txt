@@ -1,0 +1,12 @@
+mode=adapt frame=0 nStrongF=0 nStrongM=0 strongF=0.0000 strongM=0.0000 allF=0.0000 allM=0.0000
+mode=adapt frame=1 nStrongF=22692 nStrongM=6 strongF=7.5625 strongM=351.5000 allF=2.6108 allM=59.9295
+mode=adapt frame=2 nStrongF=9079 nStrongM=2 strongF=7.7162 strongM=346.0000 allF=2.4190 allM=57.7488
+mode=adapt frame=3 nStrongF=3772 nStrongM=0 strongF=7.7945 strongM=0.0000 allF=2.2881 allM=55.8088
+mode=adapt frame=4 nStrongF=1606 nStrongM=0 strongF=7.8618 strongM=0.0000 allF=2.2016 allM=54.1456
+mode=adapt frame=5 nStrongF=785 nStrongM=1 strongF=7.8739 strongM=354.0000 allF=2.1459 allM=52.6582
+mode=adapt frame=6 nStrongF=414 nStrongM=0 strongF=7.9155 strongM=0.0000 allF=2.1144 allM=51.4312
+mode=adapt frame=7 nStrongF=268 nStrongM=0 strongF=7.8955 strongM=0.0000 allF=2.0943 allM=50.1428
+mode=adapt frame=8 nStrongF=158 nStrongM=0 strongF=7.9367 strongM=0.0000 allF=2.0796 allM=49.3237
+mode=adapt frame=9 nStrongF=113 nStrongM=0 strongF=7.9646 strongM=0.0000 allF=2.0712 allM=48.3689
+mode=adapt frame=10 nStrongF=101 nStrongM=0 strongF=7.9901 strongM=0.0000 allF=2.0652 allM=47.6440
+mode=adapt frame=11 nStrongF=89 nStrongM=0 strongF=7.9551 strongM=0.0000 allF=2.0626 allM=47.0331
