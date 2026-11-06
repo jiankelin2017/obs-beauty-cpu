@@ -668,6 +668,16 @@ SmoothCfg g_cfg;
 // buildMaskInto 在异步模式整段跑在唯一的 worker 线程上，同步模式跑在渲染
 // 线程上，两条路径由 asyncOn_ 互斥，不存在并发写。这里放文件级静态状态，
 // 不放类成员，以维持 buildMaskInto「不碰成员」的既有约束。
+//
+// **1.0.0.3 修正上面的线程约束**：asyncOn_ 只互斥「同一个 core 实例」的
+// 两条路径，管不住「多个 core 实例」——同一 OBS 进程里 720p 摄像头与
+// 1080p 图像源各挂一个滤镜、各有各的 worker，它们共享这里的文件级静态，
+// 真机 e2e_occ 已 2/2 复现 0xc0000005（toneColor 越界）。因此：
+//   ① 状态访问一律持 s_faceEmaMtx（函数很小，锁开销可忽略）；
+//   ② 历史框必须大致落在当前帧分辨率内，否则视为换源/换分辨率，直接采纳
+//     本帧检测并复位迟滞 —— 迟滞分支 r=p 是原样搬坐标，跨分辨率搬运会让
+//     下游 toneColor 按 (y*w+x)*4 越界读写。
+static std::mutex s_faceEmaMtx;
 static std::vector<beautycore::FaceBox> g_faceEmaPrev;
 static bool g_faceEmaValid = false;
 static int  g_faceHoldLeft = 0;
@@ -689,7 +699,9 @@ static float faceBoxIoU(const beautycore::FaceBox& a,
 
 // 就地平滑 faces。detect 之后、画掩码与交出 fboxOut 之前调用，
 // 使肤色掩码、五官保护区、五官局部五项拿到的是同一组框。
-static void smoothFaceBoxes(std::vector<beautycore::FaceBox>& faces) {
+// w/h 是当前帧分辨率：用于跨分辨率防线（1.0.0.3，见上方状态定义处说明）。
+static void smoothFaceBoxes(std::vector<beautycore::FaceBox>& faces,
+                            int w, int h) {
     const float alpha = g_cfg.faceEma;
     const int   hold  = g_cfg.faceHold;
     // 回退口径：两个开关都关时既不读也不写状态，也不动 faces，
@@ -699,6 +711,25 @@ static void smoothFaceBoxes(std::vector<beautycore::FaceBox>& faces) {
         g_faceEmaValid = false;
         g_faceHoldLeft = 0;
         return;
+    }
+    // 多实例互斥（1.0.0.3）：两个滤镜实例的 worker 可能并发进入。
+    std::lock_guard<std::mutex> lk(s_faceEmaMtx);
+    // 跨分辨率防线（1.0.0.3）：历史框必须大致落在当前帧内。允许 ±50% 的
+    // 松弛量是给边界上的脸留余量；框宽高超过 1.5 倍帧宽/高则肯定不是本帧
+    // 分辨率里检出的。不满足就整体复位 —— EMA 与迟滞都不跨越「换源/换
+    // 分辨率」这个断点，1.0.0.2 在这里会把 720p 坐标原样搬进 1080p 帧
+    // （或反向），下游 toneColor 越界即真机崩溃。
+    for (const beautycore::FaceBox& p : g_faceEmaPrev) {
+        const bool stale =
+            p.x < -0.5f * w || p.y < -0.5f * h ||
+            p.x + p.w > 1.5f * w || p.y + p.h > 1.5f * h ||
+            p.w > 1.5f * w || p.h > 1.5f * h;
+        if (stale) {
+            g_faceEmaPrev = faces;      // 直接采纳，别从旧值慢慢爬
+            g_faceEmaValid = true;
+            g_faceHoldLeft = 0;
+            return;
+        }
     }
     if (!g_faceEmaValid || g_faceEmaPrev.size() != faces.size()) {
         g_faceEmaPrev = faces;      // 首帧或人数变化：直接采纳，别从旧值慢慢爬
@@ -2061,11 +2092,18 @@ private:
             maskAge_ = 999;
             maskValid_ = false;      // 换分辨率等于重来：别拿旧尺寸的掩码凑合
             everHadMask_ = false;    // 新尺寸下第一帧按「透传」处理，见 process()
+            // 1.0.0.3 真机崩溃修复：换尺寸时 bounds_/faces_ 还是旧坐标系的。
+            // bounds_ 是 mask 的包围盒，会被 toneColor / highLowSmooth 等下游
+            // 按 (y*w+x) 遍历 —— 旧坐标系 bounds 配新 w 直接越界（真机
+            // e2e 已 2/2 复现 0xc0000005）。旋转 -90°（宽高互换、像素总数
+            // 相同）走不进这个 if，是同族问题的另一入口，见 design 文档。
+            bounds_ = beautycore::RoiRect();
+            faces_.clear();
         }
 
         if (asyncOn_) {
             startAsyncIfNeeded();
-            collectAsync();                 // 每帧都收，不受周期限制
+            collectAsync(w, h);             // 每帧都收，不受周期限制
             // 到了重算周期：提交一帧给 worker。周期 0 = 每帧提交。
             // worker 忙时 submitAsync 会自己放弃这一轮（见它的注释），
             // 所以 60fps + 1080p 这种「推理 15ms / 帧 16.7ms」的极端情况
@@ -2075,6 +2113,14 @@ private:
                 submitAsync(src, w, h);
             } else {
                 maskAge_++;
+            }
+            // 1.0.0.3 兜底防线：掩码与包围盒必须与当前帧同尺寸同坐标系，
+            // 否则宁可这一帧不用掩码（透传/全帧路径），也不能让下游越界。
+            if (maskValid_ &&
+                (mask_.size() != (size_t)w * h ||
+                 bounds_.x0 < 0 || bounds_.y0 < 0 ||
+                 bounds_.x1 > w || bounds_.y1 > h)) {
+                maskValid_ = false;
             }
             return maskValid_;              // 结果没回来就继续用旧掩码，不等
         }
@@ -2126,7 +2172,7 @@ private:
         // 1.0.0.2：时序平滑 + 遮挡迟滞。放在这里是为了让随后的肤色掩码、
         // 五官保护区、estimateSkinCenter 与交出去的 fboxOut 用同一组框。
         // BEAUTY_FACE_EMA=0 且 BEAUTY_FACE_HOLD=0 时整段空转。
-        smoothFaceBoxes(faces);
+        smoothFaceBoxes(faces, w, h);
         facesOut = (int)faces.size();
         // 关键点要留给后续的「五官局部」五项用（亮眼/去黑眼圈/法令纹…都要位置）。
         // 在这里一次性交出去，而不是让那几项自己去调检测 —— 一帧只跑一次推理。
@@ -2581,11 +2627,14 @@ private:
     }
 
     // 收走 worker 的结果。返回 true = 这一轮确实消费了一个结果。
-    bool collectAsync() {
+    // cw/ch 是当前帧尺寸（1.0.0.3 加入）：worker 的结果是按「提交那一刻」的
+    // 帧尺寸算的，跨尺寸的结果一律丢弃 —— 交换进来的 mask/bounds 是旧坐标
+    // 系的，配当前帧就是越界（真机 e2e 复现的崩溃点）。
+    bool collectAsync(int cw, int ch) {
         beautycore::RoiRect b;
         int px = 0, faces = 0, inputSize = 0;
         float best = 0.0f;
-        bool valid = false, got = false;
+        bool valid = false, got = false, sizeOk = true;
         std::string msg;
         double ms = 0.0;
         {
@@ -2593,7 +2642,10 @@ private:
             if (async_.ready) {
                 // 只有「有脸」时才换缓冲：没脸时 worker 的 mask 内容无意义，
                 // 换进来会把当前正在用的掩码冲掉（丢帧保持就失效了）。
-                if (async_.valid) {
+                // 1.0.0.3：还要「尺寸一致」—— 场景切换等时刻，提交任务时的
+                // 帧尺寸可能已经不等于当前帧尺寸，旧结果必须整批丢弃。
+                sizeOk = (async_.w == cw && async_.h == ch);
+                if (async_.valid && sizeOk) {
                     mask_.swap(async_.mask);
                     protect_.swap(async_.protect);
                     faces_.swap(async_.fbox);
@@ -2610,7 +2662,7 @@ private:
                 b = async_.bounds;
                 px = async_.pixels;
                 faces = async_.faces;
-                valid = async_.valid;
+                valid = async_.valid && sizeOk;
                 inputSize = async_.inputSize;
                 best = async_.bestScore;
                 msg = async_.msg;
@@ -2628,9 +2680,11 @@ private:
             maskHold_ = 0;
             maskValid_ = true;
             faceErr_ = msg;
-        } else {
+        } else if (sizeOk) {
             onDetectFailed(msg, inputSize, best);
         }
+        // 尺寸不一致的结果（!sizeOk）：整批丢弃，且**不**计入检测失败迟滞 ——
+        // 检测本身没失败，只是结果属于旧坐标系。
         return true;
     }
 
