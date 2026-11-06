@@ -1,12 +1,45 @@
 # -*- coding: utf-8 -*-
-"""bench_core.py —— CoreEngine 的 CPU 性能基线 / 优化后对比
+"""bench_core.py 0.1.0 —— CoreEngine 的 CPU 性能基线 / 优化后对比
 
-测三档分辨率下 process() 的真实耗时，并区分「含检测帧」和「纯磨皮帧」：
-掩码每 4 帧重算一次，两类帧的成本差一个数量级，混在一起算平均会看不出优化效果。
+测三档分辨率下 process() 的真实耗时，并按**确定性节拍**把「纯磨皮帧」与
+「含检测帧」分开统计，再按生产口径给出 30fps 均摊值。
+
+为什么 0.1.0 重写了分组逻辑
+--------------------------
+0.1.0 之前的版本用「2 倍中位数切一刀」（`ms > median * 1.8` 判为检测帧）。
+实测这个判据**从来没生效过**：三档分辨率全部给出 `含检测 = None`，
+均摊值退化成「混在一起的均值」。原因是检测帧相对纯磨皮帧的真实倍率只有
+约 1.5x（1080p 实测 ~31ms vs ~20ms），远达不到 1.8 的阈值；低分辨率下
+两者几乎持平，更是完全分不开。
+
+现在的做法：不再猜阈值，而是利用**调用序号**直接确定每帧的身份。
+`01_源码/beauty_core.cpp` 的同步路径里 `maskAge_` 从 0 起算、`kMaskEverySync = 4`，
+因此节拍是「1 帧重算 + 4 帧沿用」= 周期 5；换分辨率时 `maskAge_` 会被置为 999，
+于是「换分辨率后的第 0 次调用必定是检测帧」。据此，第 j 次调用（j 从 0 起算）
+为检测帧当且仅当 `j % 5 == 0`。逐帧实测（1080p 的尖峰精确落在第 0/5/10/15 帧）
+已复核这一推断。
+
+由此得到的均摊口径是 **4:1**（4 帧沿用 : 1 帧重算），而不是旧版注释里的 3:1。
+`01_源码/beauty_core.cpp` 里 `kMaskEverySync` 的注释也自述「按 1/5 摊」，
+与 4:1 一致。
+
+0.1.0 还补了一个**口径开关** `--async`。原因：默认的同步模式下检测压在
+渲染线程上、每 5 帧集中收一次钱；而生产（`01_源码/beauty_core.cpp` 的
+`g_cfg.asyncDetect` 默认 true）是检测跑在 worker 上、每帧提交一次。
+同一份二进制实测两种模式差得很远（640x394：同步 11.1ms vs 异步 3.6ms 每帧），
+所以「同步台架的数」不能直接当生产帧预算用。异步模式下帧时间与预测节拍无关，
+本脚本只报分布（p50/p95/max），不报三组数。
 
 用法：
-    python bench_core.py            # 跑基线
-    python bench_core.py <tag>      # 跑并存成 bench_<tag>.json（用于前后对比）
+    python bench_core.py                     # 同步模式，tag=base（会覆盖同名历史快照，慎用）
+    python bench_core.py <tag>               # 同步模式，存成 bench_<tag>.{md,json}
+    python bench_core.py <tag> --cycles 8    # 每档多跑几个周期（默认 6）
+    python bench_core.py <tag> --async       # 异步模式（贴生产），只报帧时间分布
+
+输出：`05_验证/goldens/masks/bench_<tag>.{md,json}`
+
+版本：0.1.0（普通升级：修正分组判据与均摊权重；CPU 产品版本轴仍由
+`01_源码/beauty_params.h` 单点维护，与脚本自身版本互不相干）
 """
 
 import ctypes
@@ -25,7 +58,13 @@ RES = os.path.join(HERE, 'goldens', 'res')
 OUT = os.path.join(HERE, 'goldens', 'masks')
 
 SIZES = [('640x394', 640, 394), ('720p', 1280, 720), ('1080p', 1920, 1080)]
-REPEAT = 12
+REPEAT = 12          # 旧版字段名保留在 JSON 里，新口径见 CYCLES
+# 同步路径的检测周期：maskAge_ 从 0 起算 + kMaskEverySync = 4
+# ⇒ 「1 帧重算 + 4 帧沿用」= 5 帧一轮；检测帧满足 j % 5 == 0。
+CYCLE = 5
+PURE_PER_CYCLE = CYCLE - 1     # 4 帧沿用
+CYCLES = 6                     # 每档测 6 轮 = 6 检测 + 24 沿用
+WARMUP_CYCLE = 1               # 热机 = 1 个完整周期，顺带把相位落在「下帧是检测」
 
 
 def ascii_path(p):
@@ -50,11 +89,49 @@ def prep():
     return made
 
 
+def stats(vals):
+    if not vals:
+        return None
+    a = np.array(vals, dtype=float)
+    return {
+        'n': len(vals),
+        'p50': round(float(np.median(a)), 2),
+        'min': round(float(a.min()), 2),
+        'max': round(float(a.max()), 2),
+    }
+
+
 def main():
-    tag = sys.argv[1] if len(sys.argv) > 1 else 'base'
+    argv = sys.argv[1:]
+    cycles = CYCLES
+    if '--cycles' in argv:
+        i = argv.index('--cycles')
+        try:
+            cycles = max(1, int(argv[i + 1]))
+            del argv[i:i + 2]
+        except (IndexError, ValueError):
+            print('[bench] --cycles 需要一个整数')
+            return 1
+    tag = argv[0] if argv else 'base'
+
     if not os.path.exists(DLL):
         print('[bench] missing %s (run build_core_test.bat)' % DLL)
         return 2
+
+    mode = 'sync'
+    if '--async' in argv:
+        mode = 'async'
+        argv.remove('--async')
+    tag = argv[0] if argv else 'base'
+
+    if not os.path.exists(DLL):
+        print('[bench] missing %s (run build_core_test.bat)' % DLL)
+        return 2
+
+    # 同步模式：节拍分组的前提。异步时「第 k 帧用哪份掩码」取决于线程调度，
+    # 序号与身份不再一一对应，只能报帧时间分布。
+    os.environ['BEAUTY_ASYNC_DETECT'] = '1' if mode == 'async' else '0'
+
     dll = ctypes.WinDLL(DLL)
     dll.BeautyCoreRun.argtypes = [ctypes.c_char_p, ctypes.c_char_p,
                                   ctypes.c_int, ctypes.c_int, ctypes.c_double,
@@ -66,14 +143,30 @@ def main():
     tmp = os.path.join(OUT, '_bench_out.raw')
     report = []
 
+    # 异步模式要多热几帧：worker 要先把第一份掩码交回来，否则头几帧是透传。
+    warm = (WARMUP_CYCLE * CYCLE) if mode == 'sync' else 8
+    total = cycles * CYCLE
+    if mode == 'sync':
+        print('[bench] 模式=同步；节拍：1 检测 + %d 沿用 = 周期 %d；热机 %d 帧，每档测 %d 帧'
+              % (PURE_PER_CYCLE, CYCLE, warm, total))
+    else:
+        print('[bench] 模式=异步（贴生产）；检测在 worker，帧时间不分节拍；'
+              '热机 %d 帧，每档测 %d 帧' % (warm, total))
+
+
     for name, w, h, raw in prep():
         msg = ctypes.create_string_buffer(512)
-        # 预热：让模型加载、内存分配、掩码初始化都完成
-        for _ in range(3):
-            dll.BeautyCoreRun(raw.encode('utf-8'), tmp.encode('utf-8'),
-                              w, h, 50.0, 0, 0.0, 0.0, 1, msg, 512)
-        samples = []
-        for _ in range(REPEAT):
+        series = []
+        # 热机：让模型加载、内存分配、掩码初始化都完成。
+        # 同步模式下同时正好对齐相位 —— 换分辨率后第 0 次调用必定是检测帧（maskAge_=999）。
+        for _ in range(warm):
+            rc = dll.BeautyCoreRun(raw.encode('utf-8'), tmp.encode('utf-8'),
+                                   w, h, 50.0, 0, 0.0, 0.0, 1, msg, 512)
+            if rc != 0:
+                print('[bench] rc=%d %s' % (rc, msg.value.decode('utf-8', 'replace')))
+                return 3
+        for k in range(total):
+            j = warm + k            # 换分辨率以来的调用序号，用于定身份
             rc = dll.BeautyCoreRun(raw.encode('utf-8'), tmp.encode('utf-8'),
                                    w, h, 50.0, 0, 0.0, 0.0, 1, msg, 512)
             if rc != 0:
@@ -82,49 +175,147 @@ def main():
             info = msg.value.decode('utf-8', 'replace')
             ms = float(info.split('ms=')[1].split()[0])
             faces = int(info.split('faces=')[1].split()[0])
-            samples.append((ms, faces))
+            series.append({'j': j, 'detect': (mode == 'sync' and j % CYCLE == 0),
+                           'ms': round(ms, 2)})
 
-        vals = np.array([s[0] for s in samples])
-        # 含检测的帧明显更慢：按 2 倍中位数切一刀，分开统计
-        med = float(np.median(vals))
-        det = [s[0] for s in samples if s[0] > med * 1.8]
-        pure = [s[0] for s in samples if s[0] <= med * 1.8]
-        row = {
-            'res': name, 'w': w, 'h': h,
-            'min': round(float(vals.min()), 2),
-            'median': round(med, 2),
-            'max': round(float(vals.max()), 2),
-            'pure_med': round(float(np.median(pure)), 2) if pure else None,
-            'detect_med': round(float(np.median(det)), 2) if det else None,
-            'n_detect': len(det),
-            'faces': samples[-1][1],
-        }
-        # 30fps 均摊：检测帧占 1/4（kMaskEvery=4）
-        if row['pure_med'] is not None and row['detect_med'] is not None:
-            row['amortized'] = round(row['pure_med'] * 0.75
-                                     + row['detect_med'] * 0.25, 2)
+        allv = np.array([s['ms'] for s in series], dtype=float)
+        p50 = float(np.median(allv))
+        p95 = float(np.percentile(allv, 95))
+        mean = float(allv.mean())
+
+        if mode == 'async':
+            # 异步：帧时间与检测节拍无关，只报分布。
+            ps = ds = None
+            amortized = p50
+            ratio = None
+            warn = None
+            row = {
+                'res': name, 'w': w, 'h': h, 'mode': 'async',
+                'min': round(float(allv.min()), 2),
+                'median': round(p50, 2),
+                'p95': round(p95, 2),
+                'mean': round(mean, 2),
+                'max': round(float(allv.max()), 2),
+                'faces': faces,
+                'amortized': round(amortized, 2),
+                'warn': warn,
+                'series': series,
+            }
+            report.append(row)
+            print('  %-8s 帧 p50 %6s ms | p95 %6s ms | max %6s ms | faces=%d'
+                  % (name, row['median'], row['p95'], row['max'], row['faces']))
+            continue
+
+        pure = [s['ms'] for s in series if not s['detect']]
+        det = [s['ms'] for s in series if s['detect']]
+        ps, ds = stats(pure), stats(det)
+
+        # 均摊：一轮周期 = 4 帧沿用 + 1 帧重算，按 4:1 加权
+        if ps and ds:
+            amortized = (ps['p50'] * PURE_PER_CYCLE + ds['p50']) / float(CYCLE)
         else:
-            row['amortized'] = row['median']
+            amortized = p50
+
+        # 自检：检测帧理论上不该和沿用帧同价。若同价，先别信均摊值 ——
+        # 要么成本被淹没在噪声里，要么检测没落在这条线程的这一帧上，两者都要人来看。
+        ratio = (ds['p50'] / ps['p50']) if (ps and ds and ps['p50'] > 0) else None
+        warn = None
+        if ps is None or ds is None:
+            warn = '分组为空：本轮没有收到 %s 帧' % ('检测' if ds is None else '沿用')
+        elif ratio is not None and ratio < 0.95:
+            warn = ('检测帧比沿用帧还快（%.2fx），节拍/相位与源码语义可能脱节，'
+                    '均摊值不可信' % ratio)
+        elif ratio is not None and ratio < 1.05:
+            warn = ('检测帧与沿用帧几乎同价（%.2fx）：该档重算成本被噪声淹没，'
+                    '或检测不在本帧本线程上 —— 均摊≈纯磨皮，绝对值需交叉核对' % ratio)
+
+        row = {
+            'res': name, 'w': w, 'h': h, 'mode': 'sync',
+            'min': round(float(allv.min()), 2),
+            'median': round(p50, 2),
+            'p95': round(p95, 2),
+            'max': round(float(allv.max()), 2),
+            'pure_med': ps['p50'] if ps else None,
+            'detect_med': ds['p50'] if ds else None,
+            'n_pure': ps['n'] if ps else 0,
+            'n_detect': ds['n'] if ds else 0,
+            'pure_min': ps['min'] if ps else None,
+            'pure_max': ps['max'] if ps else None,
+            'detect_min': ds['min'] if ds else None,
+            'detect_max': ds['max'] if ds else None,
+            'detect_pure_ratio': round(ratio, 2) if ratio is not None else None,
+            'cycle': CYCLE,
+            'weight': '%d:1' % PURE_PER_CYCLE,
+            'faces': faces,
+            'amortized': round(amortized, 2),
+            'warn': warn,
+            'series': series,
+        }
         report.append(row)
-        print('  %-8s 纯磨皮 %6s ms | 含检测 %6s ms | 30fps均摊 %6s ms | faces=%d'
-              % (name, row['pure_med'], row['detect_med'],
-                 row['amortized'], row['faces']))
+        print('  %-8s 纯磨皮 %6s ms (n=%d) | 含检测 %6s ms (n=%d) | %.2fx | '
+              '30fps均摊 %6s ms | faces=%d'
+              % (name, row['pure_med'], row['n_pure'], row['detect_med'],
+                 row['n_detect'], ratio or 0.0, row['amortized'], row['faces']))
+        if warn:
+            print('           ! %s' % warn)
 
     if os.path.exists(tmp):
         os.remove(tmp)
 
-    md = ['# CoreEngine CPU 性能基线 —— %s\n' % tag,
-          '> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M:%S'),
-          '> 磨皮 50 档，down=1（未降采样）\n',
-          '| 分辨率 | 纯磨皮帧 | 含检测帧 | 30fps 均摊 | 预算余量(33ms) |',
-          '|---|---|---|---|---|']
-    for r in report:
-        md.append('| %s | %s ms | %s ms | **%s ms** | %s |'
-                  % (r['res'], r['pure_med'], r['detect_med'], r['amortized'],
-                     '够' if r['amortized'] <= 33 else '超 %.1fx' % (r['amortized'] / 33.0)))
-    md.append('')
-    md.append('> 「纯磨皮帧」= 沿用上次掩码的帧；「含检测帧」= 重跑 YuNet 的帧'
-              '（kMaskEvery=4，每 4 帧一次）。30fps 均摊按 3:1 加权。')
+    if mode == 'async':
+        md = ['# CoreEngine CPU 帧时间分布（异步检测） —— %s\n' % tag,
+              '> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M:%S'),
+              '> 磨皮 50 档，down=1（未降采样）；`BEAUTY_ASYNC_DETECT=1`',
+              '> 每档 %d 帧（热机另算 %d 帧）\n' % (cycles * CYCLE, warm),
+              '| 分辨率 | p50 | p95 | max | 均值 | 预算余量(33ms) |',
+              '|---|---|---|---|---|---|']
+        for r in report:
+            md.append('| %s | **%s ms** | %s ms | %s ms | %s ms | %s |'
+                      % (r['res'], r['median'], r['p95'], r['max'], r['mean'],
+                         '够' if r['p95'] <= 33
+                         else '超 %.1fx' % (r['p95'] / 33.0)))
+        md.append('')
+        md.append('> 异步模式下检测跑在 worker 线程、每帧提交（`maskEveryAsync = 0`），'
+                  '渲染线程的帧时间不再随预测节拍起伏，因此只报分布、不报三组数。')
+        md.append('> **worker 侧的推理与掩码成本不含在本表内** —— 它体现在 CPU 占用上，'
+                  '不在帧预算里。判「掉不掉帧」看本表，判「吃多少核」要看进程 CPU 占用。')
+        md.append('> 这是贴生产口径的数（`g_cfg.asyncDetect` 默认 true）；'
+                  '同步口径（每 5 帧集中收一次检测钱）见同名 `-sync` 输出。')
+    else:
+        md = ['# CoreEngine CPU 性能基线 —— %s\n' % tag,
+              '> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M:%S'),
+              '> 磨皮 50 档，down=1（未降采样）；`BEAUTY_ASYNC_DETECT=0` 强制同步',
+              '> 每档 %d 轮 × %d 帧 = %d 帧（热机另算 %d 帧）\n'
+              % (cycles, CYCLE, cycles * CYCLE, warm),
+              '| 分辨率 | 纯磨皮帧 p50 | 含检测帧 p50 | 30fps 均摊 | 预算余量(33ms) |',
+              '|---|---|---|---|---|']
+        for r in report:
+            md.append('| %s | %s ms | %s ms | **%s ms** | %s |'
+                      % (r['res'], r['pure_med'], r['detect_med'], r['amortized'],
+                         '够' if r['amortized'] <= 33
+                         else '超 %.1fx' % (r['amortized'] / 33.0)))
+        md.append('')
+        md.append('| 分辨率 | 纯磨皮 n / min–max | 含检测 n / min–max | 检测/沿用倍率 | 自检 |')
+        md.append('|---|---|---|---|---|')
+        for r in report:
+            md.append('| %s | %d / %s–%s ms | %d / %s–%s ms | %sx | %s |'
+                      % (r['res'], r['n_pure'], r['pure_min'], r['pure_max'],
+                         r['n_detect'], r['detect_min'], r['detect_max'],
+                         r['detect_pure_ratio'] if r['detect_pure_ratio'] else '-',
+                         r['warn'] or 'ok'))
+        md.append('')
+        md.append('> 「纯磨皮帧」= 沿用上次掩码的帧；「含检测帧」= 重跑 YuNet 的帧。'
+                  '同步路径 `kMaskEverySync = 4` 且 `maskAge_` 从 0 起算，'
+                  '实际节拍为「1 帧重算 + %d 帧沿用」= 周期 %d，'
+                  '故 30fps 均摊按 %d:1 加权（不是 3:1）。'
+                  % (PURE_PER_CYCLE, CYCLE, PURE_PER_CYCLE))
+        md.append('> 帧身份按**调用序号**判定（第 j 次调用为检测帧 ⇔ `j %% %d == 0`），'
+                  '不依赖耗时阈值；「检测/沿用倍率」列与「自检」列用于验证该推断仍然成立。'
+                  % CYCLE)
+        md.append('> 本表是**同步口径**，不等于生产：生产默认异步检测，'
+                  '帧时间见同名的 `--async` 输出。')
+        md.append('> 均摊值只覆盖引擎层；插件层 `gs_stagesurface_map` 下载与 '
+                  '`gs_texture_set_image` 上传往返不在其中。')
 
     out_md = os.path.join(OUT, 'bench_%s.md' % tag)
     with open(out_md, 'w', encoding='utf-8') as f:

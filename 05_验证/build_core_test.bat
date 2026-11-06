@@ -17,7 +17,8 @@ set LIB=%VSBASE%\lib\x64;%SDKBASE%\Lib\%SDKVER%\ucrt\x64;%SDKBASE%\Lib\%SDKVER%\
 set HERE=%~dp0
 set ROOT=%HERE%..
 set SRC=
-for /d %%d in ("%ROOT%\00_*") do set SRC=%%d
+rem Source tree was renamed 00_* -> 01_*; probe by marker file, same as build_manual.bat.
+for /d %%d in ("%ROOT%\01_*") do if exist "%%d\obs-beauty.cpp" set SRC=%%d
 if not defined SRC (
     echo [core-test] source dir not found under %ROOT%
     exit /b 1
