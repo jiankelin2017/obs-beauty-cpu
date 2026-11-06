@@ -100,12 +100,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "06_安装包\build_setup.ps
 ### 2.4 上传前自检（法务/隐私红线，务必执行）
 
 ```powershell
-python 05_验证\check_upload.py            # 检查当前索引
-python 05_验证\check_upload.py --staged   # 提交前检查暂存区
-python 05_验证\check_upload.py --fix      # 移除「已跟踪但工作区已删」的残留条目
+python 05_验证\check_upload.py            # 合规：检查当前索引
+python 05_验证\check_upload.py --staged   # 合规：提交前检查暂存区
+python 05_验证\check_upload.py --fix      # 合规：移除「已跟踪但工作区已删」的残留条目
+python 05_验证\check_docs.py              # 文档：全量一致性自检
+python 05_验证\check_docs.py --staged     # 文档：提交前模式，附列本次涉及的文档
 ```
 
-四道断言：索引一致性 · 法务红线（闭源商业资产）· 隐私红线（真人面部位图 / `.raw` 帧）· 体积红线（单文件 > 1 MB 应走 Release 附件）。
+**提交前是双闸门，两条都要过**：
+`check_upload.py` 四道断言 = 索引一致性 · 法务红线（闭源商业资产）· 隐私红线（真人面部位图 / `.raw` 帧）· 体积红线（单文件 > 1 MB 应走 Release 附件）；
+`check_docs.py` 六条断言 = Active 文档头六字段 · 归档件 `ARCHIVED` 头与替代指向 · `docs/INDEX.md` 双向登记 · `docs/` 路径零断链 · 命名规范 · 当前版数字表格（**只告警不阻断**）。
+后者只读、纯标准库、失败退出码 1；历史归档头里的「待第 N 批」措辞按已知历史标注放行，不会误报。
 
 ---
 
@@ -186,6 +191,10 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 > 开关名与默认值已按当前源码逐字复核，例如幅度门控上限是配置字段 `freqMagHi`、
 > 环境变量为 `BEAUTY_FREQ_MAG`，**不存在 `BEAUTY_FREQ_MAG_HI`**。
 
+**防腐化**：`docs/INDEX.md` §0 有统一文档头模板与自动校验规则，§5 有 7 条维护约定；
+`05_验证/check_docs.py`（`0.1.0`）把「新增文档漏登记 INDEX / 归档件没写替代指向 / 改路径留断链 /
+命名跑偏」变成提交前可拦截的断言。该脚本自身版本与 CPU 产品版本轴互不相干，产品轴仍 `1.0.0.0`。
+
 ---
 
 ## 6. 合规与红线
@@ -262,6 +271,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `docs/archive/c03` / `c05` / `c12` / `c20` / `c21`（并引用 `ab-mask` / `c02` / `c19`） | **第 4B 批**：归并为 `docs/design/design-face-mask.md`；闭合 `c19` 根因被 `c20` 推翻、`c21` 落地的证伪链 |
 | `docs/archive/c14` / `c16` / `c17` / `c18` / `c19`（并引用 `ab-metric` / `ab-smooth` / `c20` / `c21`） | **第 4B 批**：归并为 `docs/design/design-quality-findings.md`；只留证伪链与口径纪律，**不搬历史轴数字表格** |
 | `docs/archive/c10-async-detect-20261106.md` | **第 4B 批**：并入 `docs/design/design-cpu-performance.md` 新增 §8（不新建 design 文件）；登记抢核副作用、确定性与 stagesurface 往返盲区 |
+| 治理输出第 6 项（方案 B） | 新建 `05_验证/check_docs.py`（六条断言、纯标准库、只读、负向测试通过）；`docs/INDEX.md` §0 补统一文档头模板与自动校验规则、§5 补第 7 条提交前双闸门；本 README §2.4 / §5 同步。未引入 hook / CI，不改变提交行为 |
 
 ---
 
