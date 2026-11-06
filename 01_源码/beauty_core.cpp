@@ -594,6 +594,18 @@ struct SmoothCfg {
     int regSpotRadius = 2;          // 5×5 窗口。2~4 是斑点尺度，再大就吃到结构
     float regSpotThrLo = 1.4f;      // 小于它算皮肤细纹理，不动
     float regSpotThrHi = 30.0f;     // 大于它算真边缘（睫毛/鼻孔/唇线），不动
+
+    // ---- 人脸框时序平滑（1.0.0.2；按用户裁定撤销 §7「不做人脸框 EMA」）----
+    // 遮住半边脸时 YuNet 仍会给出框，但中心与大小会跳，掩码跟着跳。
+    // faceEma = 0 且 faceHold = 0 时整段不执行，逐字节回到 1.0.0.1。
+    // ⚠️ 默认开启会引入帧间状态，破坏逐字节确定性；所有历史 golden 基线
+    // 必须显式加 BEAUTY_FACE_EMA=0 才能复现，见 docs/CHANGELOG.md §2。
+    float faceEma = 0.35f;
+    // 遮挡迟滞：新框面积骤变或与历史框 IoU 过低时，最多沿用历史框多少帧。
+    // 0 = 只做 EMA，不做迟滞。
+    int   faceHold = 6;
+    float faceHoldAreaRatio = 0.65f;   // 面积比低于它（或高于倒数）判为跳变
+    float faceHoldIoU = 0.30f;         // IoU 低于它判为跳变
 };
 
 // 关键点是否可信。
@@ -643,6 +655,111 @@ void paintProtectEllipse(unsigned char* buf, int w, int h,
     }
 }
 SmoothCfg g_cfg;
+
+// ---------------------------------------------------------------------------
+// 1.0.0.2：人脸框时序平滑与遮挡迟滞（按用户裁定撤销 §7「不做人脸框 EMA」）
+//
+// 用户反馈的现象是「挡住半边脸时脸部遮罩闪烁」，并说明 GPU 版同样存在。
+// 归档 c21 §3.1 把闪烁归因于「检测 faces 坐标抖」，但同文档 §6 自己把这句
+// 标为个人推测、未做消融验证。本轮按 B 授权直接落地，**未做真机复现**，
+// 因此这里不声称「已修好」，只提供一个可回退、可逐字节验证的实现。
+//
+// 线程约束沿用 g_skinCb / g_skinCr 的先例（见 buildMaskInto 里的说明）：
+// buildMaskInto 在异步模式整段跑在唯一的 worker 线程上，同步模式跑在渲染
+// 线程上，两条路径由 asyncOn_ 互斥，不存在并发写。这里放文件级静态状态，
+// 不放类成员，以维持 buildMaskInto「不碰成员」的既有约束。
+static std::vector<beautycore::FaceBox> g_faceEmaPrev;
+static bool g_faceEmaValid = false;
+static int  g_faceHoldLeft = 0;
+
+static float faceBoxIoU(const beautycore::FaceBox& a,
+                        const beautycore::FaceBox& b) {
+    const float ix0 = (a.x > b.x) ? a.x : b.x;
+    const float iy0 = (a.y > b.y) ? a.y : b.y;
+    const float ax1 = a.x + a.w, ay1 = a.y + a.h;
+    const float bx1 = b.x + b.w, by1 = b.y + b.h;
+    const float ix1 = (ax1 < bx1) ? ax1 : bx1;
+    const float iy1 = (ay1 < by1) ? ay1 : by1;
+    const float iw = ix1 - ix0, ih = iy1 - iy0;
+    if (iw <= 0.0f || ih <= 0.0f) return 0.0f;
+    const float inter = iw * ih;
+    const float uni = a.w * a.h + b.w * b.h - inter;
+    return (uni > 0.0f) ? inter / uni : 0.0f;
+}
+
+// 就地平滑 faces。detect 之后、画掩码与交出 fboxOut 之前调用，
+// 使肤色掩码、五官保护区、五官局部五项拿到的是同一组框。
+static void smoothFaceBoxes(std::vector<beautycore::FaceBox>& faces) {
+    const float alpha = g_cfg.faceEma;
+    const int   hold  = g_cfg.faceHold;
+    // 回退口径：两个开关都关时既不读也不写状态，也不动 faces，
+    // 输出与 1.0.0.1 逐字节一致。
+    if (alpha <= 0.0f && hold <= 0) return;
+    if (faces.empty()) {
+        g_faceEmaValid = false;
+        g_faceHoldLeft = 0;
+        return;
+    }
+    if (!g_faceEmaValid || g_faceEmaPrev.size() != faces.size()) {
+        g_faceEmaPrev = faces;      // 首帧或人数变化：直接采纳，别从旧值慢慢爬
+        g_faceEmaValid = true;
+        g_faceHoldLeft = 0;
+        return;
+    }
+
+    const float arGate = (g_cfg.faceHoldAreaRatio > 0.05f)
+        ? g_cfg.faceHoldAreaRatio : 0.05f;
+    std::vector<beautycore::FaceBox> out;
+    out.reserve(faces.size());
+    std::vector<char> used(g_faceEmaPrev.size(), 0);
+    bool anyHold = false;
+
+    for (size_t i = 0; i < faces.size(); i++) {
+        const beautycore::FaceBox& n = faces[i];
+        // 按中心距离最近匹配历史框；多人脸时按数组下标匹配会错配。
+        int best = -1;
+        float bestD2 = 1e30f;
+        const float ncx = n.x + n.w * 0.5f, ncy = n.y + n.h * 0.5f;
+        for (size_t j = 0; j < g_faceEmaPrev.size(); j++) {
+            if (used[j]) continue;
+            const beautycore::FaceBox& p = g_faceEmaPrev[j];
+            const float dx = (p.x + p.w * 0.5f) - ncx;
+            const float dy = (p.y + p.h * 0.5f) - ncy;
+            const float d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) { bestD2 = d2; best = (int)j; }
+        }
+        if (best < 0) { out.push_back(n); continue; }
+        used[best] = 1;
+        const beautycore::FaceBox& p = g_faceEmaPrev[best];
+        const float areaRatio = (p.w * p.h > 0.0f)
+            ? (n.w * n.h) / (p.w * p.h) : 1.0f;
+        const bool jump = (areaRatio < arGate ||
+                           areaRatio > 1.0f / arGate ||
+                           faceBoxIoU(n, p) < g_cfg.faceHoldIoU);
+
+        beautycore::FaceBox r = n;
+        if (hold > 0 && jump && g_faceHoldLeft < hold) {
+            r = p;                  // 疑似遮挡造成的跳变：暂不采信新框
+            anyHold = true;
+        } else if (alpha > 0.0f) {
+            r.x = p.x + (n.x - p.x) * alpha;
+            r.y = p.y + (n.y - p.y) * alpha;
+            r.w = p.w + (n.w - p.w) * alpha;
+            r.h = p.h + (n.h - p.h) * alpha;
+            if (n.hasKps && p.hasKps) {
+                for (int k = 0; k < 10; k++)
+                    r.kps[k] = p.kps[k] + (n.kps[k] - p.kps[k]) * alpha;
+                r.hasKps = true;
+            } else {
+                r.hasKps = n.hasKps;   // 关键点缺失时不造出混合出来的假值
+            }
+        }
+        out.push_back(r);
+    }
+    g_faceHoldLeft = anyHold ? (g_faceHoldLeft + 1) : 0;
+    g_faceEmaPrev = out;            // 历史存平滑后的值，标准 EMA 语义
+    faces = out;
+}
 
 // 异步掩码的提交计数（诊断用，只增不减）。
 // 为什么需要它：提交周期从 4 帧改成每帧，从「每帧毫秒」上完全看不出来 ——
@@ -1014,8 +1131,8 @@ public:
     const char* id() const override { return "core"; }
     // 1.4.0 → 1.4.1（3.1.40）：无脸帧改走逐字节透传，不再全帧兜底磨皮。
     // 门控语义变了 ⇒ 无脸帧的画面输出与 1.4.0 不同，旧的对拍数字不覆盖这条路径。
-    // 引擎版本并入 CPU 单轴（当前 1.0.0.1），不再维护独立的 core 1.4.x 号。
-    const char* version() const override { return "1.0.0.1"; }
+    // 引擎版本并入 CPU 单轴（当前 1.0.0.2），不再维护独立的 core 1.4.x 号。
+    const char* version() const override { return "1.0.0.2"; }
 
     bool ensureReady(std::string& err) override {
         // 人脸检测模型只试一次。失败不阻止引擎就绪 —— 降级为「无掩码，全帧磨皮」，
@@ -1190,6 +1307,16 @@ public:
             // （无掩码 → 全帧兜底磨皮，逐字节等于 3.1.39）。
             const char* nfs = getenv("BEAUTY_NOFACE_SKIP");
             if (nfs && *nfs) g_cfg.noFaceSkip = (nfs[0] != '0');
+            // 1.0.0.2 人脸框时序平滑。两个开关都关才逐字节回到 1.0.0.1；
+            // 复现历史 golden 基线时请显式设 BEAUTY_FACE_EMA=0 BEAUTY_FACE_HOLD=0。
+            const char* fbEma = getenv("BEAUTY_FACE_EMA");
+            if (fbEma && *fbEma) g_cfg.faceEma = (float)atof(fbEma);
+            const char* fbHold = getenv("BEAUTY_FACE_HOLD");
+            if (fbHold && *fbHold) g_cfg.faceHold = atoi(fbHold);
+            const char* fbArea = getenv("BEAUTY_FACE_AREA");
+            if (fbArea && *fbArea) g_cfg.faceHoldAreaRatio = (float)atof(fbArea);
+            const char* fbIou = getenv("BEAUTY_FACE_IOU");
+            if (fbIou && *fbIou) g_cfg.faceHoldIoU = (float)atof(fbIou);
             // 异步提交周期：BEAUTY_MASK_EVERY=4 退回 3.1.7 的节奏（拖影回来，但省 CPU）。
             // 留这个口子是为了让真机能当场对比 0 / 1 / 2 / 4 四档，不用改代码重编译。
             const char* me = getenv("BEAUTY_MASK_EVERY");
@@ -1976,6 +2103,8 @@ private:
     // 刻意做成**只读 src、不碰任何成员**的函数：异步化时它整段跑在 worker 线程上，
     // 只要不碰成员就不存在数据竞争。这也是异步化能做得这么轻的原因 ——
     // 不需要给磨皮链加锁。
+    // 1.0.0.2 起会读写文件级静态的 g_faceEmaPrev（见其定义处的线程约束），
+    // 与既有的 g_skinCb / g_skinCr 同一模式；仍不碰任何类成员。
     bool buildMaskInto(const unsigned char* src, int w, int h,
                        std::vector<unsigned char>& maskOut,
                        std::vector<unsigned char>& protectOut,
@@ -1994,6 +2123,10 @@ private:
             facesOut = 0;
             return false;
         }
+        // 1.0.0.2：时序平滑 + 遮挡迟滞。放在这里是为了让随后的肤色掩码、
+        // 五官保护区、estimateSkinCenter 与交出去的 fboxOut 用同一组框。
+        // BEAUTY_FACE_EMA=0 且 BEAUTY_FACE_HOLD=0 时整段空转。
+        smoothFaceBoxes(faces);
         facesOut = (int)faces.size();
         // 关键点要留给后续的「五官局部」五项用（亮眼/去黑眼圈/法令纹…都要位置）。
         // 在这里一次性交出去，而不是让那几项自己去调检测 —— 一帧只跑一次推理。

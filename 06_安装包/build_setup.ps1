@@ -2,7 +2,7 @@
 #  build_setup.ps1 - 打包 "OBS美颜" 安装包 (NSIS 3)
 #
 #  做什么：
-#    1) 从 02_构建\build_1.0.0.1 取滤镜/面板 DLL（CPU 线独立产物目录），
+#    1) 从 02_构建\build_1.0.0.2 取滤镜/面板 DLL（CPU 线独立产物目录），
 #       从 05_验证 取 ONNX Runtime + YuNet
 #    2) 校验版本串（防止把旧构建打进包里 —— C13 坑 #1）
 #    3) 暂存到纯 ASCII 目录（NSIS 遇到中文源路径会报 no files found）
@@ -24,19 +24,19 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root      = Split-Path -Parent $ScriptDir
-# CPU 1.0.0.1 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
+# CPU 1.0.0.2 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
 # 绝不读 build_output（那里是 3.1.40，版本串自检会拦住但不必依赖它）。
 # 需要临时指向别处（例如验证构建）时设环境变量 BEAUTY_BUILD_OUT。
-$BuildOut  = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root '02_构建\build_1.0.0.1' }
+$BuildOut  = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root '02_构建\build_1.0.0.2' }
 $Nsi       = Join-Path $ScriptDir 'obs-beauty.nsi'
 $Makensis  = 'C:\Program Files (x86)\NSIS\makensis.exe'
 
 # CPU 四段版本轴（唯一口径见 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR）。
 # GPU 版是另一条独立轴（3.0.1，三段式），两条轴不可互比。
-$Ver = '1.0.0.1'
-$FilterVer = '1.0.0.1'
-$PanelVer  = '1.0.0.1'
-$CoreVer   = '1.0.0.1'
+$Ver = '1.0.0.2'
+$FilterVer = '1.0.0.2'
+$PanelVer  = '1.0.0.2'
+$CoreVer   = '1.0.0.2'
 
 function Fail($msg) { Write-Host "[build] ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Info($msg) { Write-Host "[build] $msg" }
@@ -75,10 +75,10 @@ function Assert-ContainsBytes([string]$path, [string]$needle) {
         Fail "$([System.IO.Path]::GetFileName($path)) does not contain '$needle' - it is a stale build"
     }
 }
-Assert-ContainsBytes $Src.filter '1.0.0.1'
-Assert-ContainsBytes $Src.panel  '1.0.0.1'
+Assert-ContainsBytes $Src.filter '1.0.0.2'
+Assert-ContainsBytes $Src.panel  '1.0.0.2'
 Assert-ContainsBytes $Src.filter 'obs_beauty_filter'
-Info 'version strings OK (CPU 1.0.0.1 / obs_beauty_filter)'
+Info 'version strings OK (CPU 1.0.0.2 / obs_beauty_filter)'
 
 # ---------------------------------------------------------------- 暂存目录
 $Stage = Join-Path $env:TEMP 'obsbeauty_pkg'

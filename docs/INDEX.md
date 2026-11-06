@@ -2,9 +2,9 @@
 
 | 字段 | 值 |
 |---|---|
-| 版本 | `1.0.0.1` |
+| 版本 | `1.0.0.2` |
 | 最后更新 | 2026-11-06 |
-| 适用代码版本 | CPU 线 `1.0.0.1`（立轴提交 `5323856`） |
+| 适用代码版本 | CPU 线 `1.0.0.2`（立轴提交 `5323856`） |
 | 维护人 | 待人工确认 |
 | 状态 | `Active`（**第 4 批已完成；`04_文档/` tracked 待治理清零；第 6 项防腐化哨兵已落地；单独清理批已收口历史数字**） |
 | 替代文档 | 无（新建） |
@@ -33,9 +33,9 @@
 ```markdown
 | 字段 | 值 |
 |---|---|
-| 版本 | `1.0.0.0` |
+| 版本 | `1.0.0.2` |
 | 最后更新 | YYYY-MM-DD |
-| 适用代码版本 | CPU 线 `1.0.0.1` |
+| 适用代码版本 | CPU 线 `1.0.0.2` |
 | 维护人 | 待人工确认 |
 | 状态 | `Active` |
 | 替代文档 | 无（新建）／按 `主题-YYYYMMDD.md` 归档后填归档件路径 |
@@ -50,15 +50,15 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 
 | 主题 | 路径 | 类型 | 状态 | 适用版本 | 维护人 | 最后核对 | 替代/归档 |
 |---|---|---|---|---|---|---|---|
-| 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.0.1` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md` |
-| 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.0.1` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/changelog-raw-20261106.md` |
+| 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md` |
+| 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/changelog-raw-20261106.md` |
 | CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（架构 / 开关有效；历史轴数字未重测） | CPU `1.0.0.0`（当前版零历史实测数字） | 待人工确认 | 2026-11-06 | 重写前全文见 `docs/archive/c1-cpu-performance-20261106.md`；第 4B 批并入 `docs/archive/c10-async-detect-20261106.md`（§8）；单独清理批整篇重写、§8 编号不变 |
 | 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并且替代 `c02` / `c04` / `c07` / `c08` / `c15` 五篇归档件 |
 | 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c06` / `c09` / `c11`，引用 `c03` 与 `oss-survey` §8.4 |
-| 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c03` / `c05` / `c12` / `c20` / `c21`，引用 `ab-mask` / `c02` / `c19` |
-| 画质对拍结论与证伪链 | `docs/design/design-quality-findings.md` | design | `Active`（**全部为历史轴结论，当前轴未重测**） | CPU `1.0.0.1` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c14` / `c16` / `c17` / `c18` / `c19`，引用 `ab-metric` / `ab-smooth` / `c20` / `c21` |
-| 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.0.1` | 待人工确认 | 2026-11-06 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md` |
-| 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` | guides | `Active`（装机状态待人工确认） | CPU `1.0.0.1` | 待人工确认 | 2026-11-06 | 原 `04_文档\顶层菜单插件说明.md`；未采用的 HTML+websocket 方案见 `docs/archive/ui-html-websocket-proposal-20261106.md` |
+| 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` | design | `Active`（数字未重测） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c03` / `c05` / `c12` / `c20` / `c21`，引用 `ab-mask` / `c02` / `c19` |
+| 画质对拍结论与证伪链 | `docs/design/design-quality-findings.md` | design | `Active`（**全部为历史轴结论，当前轴未重测**） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c14` / `c16` / `c17` / `c18` / `c19`，引用 `ab-metric` / `ab-smooth` / `c20` / `c21` |
+| 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md` |
+| 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` | guides | `Active`（装机状态待人工确认） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 原 `04_文档\顶层菜单插件说明.md`；未采用的 HTML+websocket 方案见 `docs/archive/ui-html-websocket-proposal-20261106.md` |
 | 许可与第三方组件口径 | `docs/reference/reference-licensing.md` | reference | `Active`（**口径冲突待人工确认，不含许可结论**） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 已合并 `docs/archive/opensource-boundary-20261106.md` 许可部分、`docs/archive/oss-survey-20261106.md` §4 |
 | 文档总表 | `docs/INDEX.md` | INDEX | `Active`（第 4 批） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 无 |
 
@@ -175,7 +175,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 > 治理输出第 6 项「防腐化机制」已落地为 `05_验证/check_docs.py`（`0.1.0`）与本节第 7 条双闸门，
 > 模板与规则固化在 §0。**未引入 git hook / CI**（不改变提交行为）；
 > 若以后公开仓库或多人协作需要强制拦截，再单独确认后升级为 `pre-commit` / GitHub Actions。
-> 新增脚本的 `0.1.0` 是脚本自身起始版本，**该批时 CPU 产品版本轴仍 `1.0.0.0`**（现已递增至 `1.0.0.1`），两者互不牵动。
+> 新增脚本的 `0.1.0` 是脚本自身起始版本，**该批时 CPU 产品版本轴仍 `1.0.0.0`**（现已递增至 `1.0.0.2`），两者互不牵动。
 
 ---
 
