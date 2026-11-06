@@ -180,7 +180,12 @@ OBS_DECLARE_MODULE()
  *         永远测不出真机高度（这正是 3.1.26~3.1.37 反复"探针 OK、装机不对"
  *         的原因）。现在探针按 Yami.obt 的真实写法模拟，并新增
  *         reportCtrlHeights() 直接打印每类控件的 height()，min==max 才算过。 */
-#define BEAUTY_UI_VERSION "3.1.39"
+// 3.1.40：面板「拖了美颜没反应」自愈修复（UI 源码唯一版本出处，装机件由 3.1.39 升来）。
+//   ① 无滤镜实例时不再静默丢参数：限流日志 + 面板红字提示，明确告诉用户去点「刷新」；
+//   ② 记住上次绑定的 (源, 滤镜)，实例失效后在窗口激活时自动重新枚举并重连；
+//   ③ 滑块回调里只做「轻量重连」——绝不调用 build_form()，否则正在按着的控件会被
+//      deleteLater 掉（见 sync_now 的 mouseButtons 判据，历史上为此崩过）。
+#define BEAUTY_UI_VERSION "3.1.40"
 
 /* ---- 前端 API：OBS 安装包不带 obs-frontend-api.h，按 ABI 直接声明 ---- */
 extern "C" {
@@ -729,6 +734,125 @@ protected:
 	}
 
 private:
+	/* ==================================================================
+	 * 3.1.40：绑定自愈三件套
+	 *
+	 * 故障复盘（2026-11-06 实机）：源被移除重建 / 滤镜被删后重加时，
+	 * 面板手里的 filter_ 要么被置空，要么还指向已不在 OBS 图中的旧实例。
+	 * 旧版 apply_*() 开头一句 `if (!filter_) return;` 把参数**静默丢掉**，
+	 * 用户拖磨皮毫无反应、OBS 日志里连一条「档位变化」都没有，
+	 * 界面上却看不到任何错误 —— 这是最难自查的一类故障。
+	 *
+	 * 分工：
+	 *   ensure_binding() —— 所有写回路径的统一守卫（滑块回调专用，零 Qt 操作）
+	 *   try_light_rebind() —— 只按名字重新取引用，绝不 rebuild 控件
+	 *   validate_binding() —— 窗口激活时做完整校验，允许 rebuild 控件
+	 *   warn_no_filter()  —— 限流日志 + 面板红字，把「去点刷新」说清楚
+	 *
+	 * 铁律：**滑块回调里绝不调用 build_form() / reload()**。
+	 * 用户正按着的那个 QSlider 会被 clear_form() 的 deleteLater 删掉，
+	 * 历史上为此崩过（见原 sync_now() 的 mouseButtons 判据）。
+	 * ================================================================== */
+
+	/* 按记住的 (源, 滤镜) 名字重新取一次引用。不碰任何 Qt 控件，
+	 * 因此可以在滑块 valueChanged 回调里安全调用。 */
+	bool try_light_rebind()
+	{
+		if (bound_source_.empty() || bound_filter_.empty())
+			return false;
+		obs_source_t *src = obs_get_source_by_name(bound_source_.c_str());
+		if (!src)
+			return false;
+		obs_source_t *f = obs_source_get_filter_by_name(src, bound_filter_.c_str());
+		obs_source_release(src);
+		if (!f)
+			return false;
+		/* 名字还在也可能拿到的是被标记 removed 的僵尸实例，必须再验一次 */
+		if (obs_source_removed(f)) {
+			obs_source_release(f);
+			return false;
+		}
+		if (f == filter_) {
+			obs_source_release(f);
+			return false;   /* 同一个实例已被判失效，不算重连成功 */
+		}
+		if (filter_)
+			obs_source_release(filter_);
+		filter_ = f;
+		blog(LOG_WARNING,
+		     "[obs-beauty-ui] 面板自动重连成功：源=%s 滤镜=%s（上次绑定已失效）",
+		     bound_source_.c_str(), bound_filter_.c_str());
+		return true;
+	}
+
+	/* 拖一次滑块会连发几十次 valueChanged，2 秒只报一次，别把日志刷爆。 */
+	void warn_no_filter(const char *key)
+	{
+		const unsigned long long now = GetTickCount64();
+		if (last_no_filter_warn_ && now - last_no_filter_warn_ < 2000)
+			return;
+		last_no_filter_warn_ = now;
+		blog(LOG_WARNING,
+		     "[obs-beauty-ui] 参数 %s 未生效：面板未绑定美颜滤镜实例"
+		     "（上次绑定：源=%s 滤镜=%s）。请给摄像头源添加「OBS美颜」"
+		     "滤镜，然后点面板右上角「刷新」。",
+		     key ? key : "?",
+		     bound_source_.empty() ? "(无)" : bound_source_.c_str(),
+		     bound_filter_.empty() ? "(无)" : bound_filter_.c_str());
+		if (hint_) {
+			hint_->setStyleSheet(QStringLiteral("color:#e5533d;font-size:12px;"));
+			set_hint(QString::fromUtf8(
+				"参数未生效：面板没连上美颜滤镜。请确认摄像头源上已添加"
+				"「OBS美颜」滤镜，然后点右上角「刷新」。"));
+		}
+	}
+
+	/* 所有 apply_* / reset_defaults 的唯一入口。
+	 * 返回 true 表示 filter_ 可用；false 表示已明确告警，调用方直接 return。 */
+	bool ensure_binding(const char *key)
+	{
+		if (filter_ && !obs_source_removed(filter_))
+			return true;                 /* 正常快路径 */
+		if (try_light_rebind())
+			return true;                 /* 轻量自愈，控件一个都不动 */
+		warn_no_filter(key);
+		return false;
+	}
+
+	/* 窗口被激活时调用（此时没有鼠标按住，允许 rebuild 控件）。
+	 * 旧版 filter_ 非空就只 build_form()，源/滤镜重建后面板会一直抱着
+	 * 僵尸引用 —— 正是本次实机「拖了没反应」的根因。 */
+	bool validate_binding()
+	{
+		if (!filter_ || obs_source_removed(filter_))
+			return false;
+		if (bound_source_.empty() || bound_filter_.empty())
+			return true;    /* 无记忆信息（老场景）→ 退回旧行为，不误伤 */
+		obs_source_t *src = obs_get_source_by_name(bound_source_.c_str());
+		if (!src)
+			return false;
+		obs_source_t *cur = obs_source_get_filter_by_name(src, bound_filter_.c_str());
+		obs_source_release(src);
+		if (!cur || obs_source_removed(cur)) {
+			if (cur)
+				obs_source_release(cur);
+			return false;
+		}
+		if (cur != filter_) {
+			/* 同名但换了实例（源被移除重建 / 滤镜删后重加）。
+			 * 换引用即可，表单由调用方 build_form() 重建。 */
+			obs_source_release(filter_);
+			filter_ = cur;
+			blog(LOG_WARNING,
+			     "[obs-beauty-ui] 窗口激活：检测到美颜滤镜实例已重建，"
+			     "面板已自动重连（源=%s 滤镜=%s）",
+			     bound_source_.c_str(), bound_filter_.c_str());
+		} else {
+			obs_source_release(cur);   /* 同一个实例，释放刚取的多余引用 */
+		}
+		return true;
+	}
+
 	void sync_now()
 	{
 		if (syncing_)   /* 重建控件本身不该再触发一次同步 */
@@ -741,14 +865,14 @@ private:
 		if (!isVisible())
 			return;
 		syncing_ = true;
-		if (filter_) {
-			/* 只重建表单，不重新枚举源：枚举有开销，而且会把用户
-			 * 当前选中的那个实例跳掉。 */
+		if (validate_binding()) {
+			/* 绑定仍然有效：只刷新显示值，不重新枚举源 */
+			set_hint(QString());
 			build_form();
 		} else {
-			/* 上次没找到滤镜（比如面板先开着、之后才加滤镜）。
-			 * 再找一次，找到就自动接上。 */
-			reload(false);
+			/* 未绑定 / 绑定失效：重新枚举并自动接上。
+			 * keep_selection=true 保证多路实例时不会跳回第一个。 */
+			reload(true);
 		}
 		syncing_ = false;
 	}
@@ -771,6 +895,12 @@ private:
 	 * 原来的 QHBoxLayout *btn_row_ 成员随之删除。 */
 	obs_source_t *filter_ = nullptr;
 	std::vector<Inst> insts_;
+	/* 3.1.40：记住上次成功绑定的 (源, 滤镜)。源被移除重建后，
+	 * reload() 会把 filter_ 置空但**不清这两个字符串**，这样滑块回调里
+	 * 就能做一次不重建控件的轻量重连（try_light_rebind）。 */
+	std::string bound_source_;
+	std::string bound_filter_;
+	unsigned long long last_no_filter_warn_ = 0; /* GetTickCount64，2 秒限流 */
 	bool loading_ = false;
 	/* 3.1.37：几何记忆。save_timer_ 是 800ms 防抖写盘器（resize/move 都重启它）；
 	 * ready_ 之后才允许写 —— 构造期 restore_ui_state() 自己会 resize/move，
@@ -839,6 +969,10 @@ private:
 	{
 		if (!hint_)
 			return;
+		/* 3.1.40：空文本 = 恢复正常态，把 warn_no_filter() 设的红字
+		 * 清掉，回到样式表里 QLabel#beautyHint 的灰色。 */
+		if (text.isEmpty())
+			hint_->setStyleSheet(QString());
 		hint_->setText(text);
 		hint_->setVisible(!text.isEmpty());
 	}
@@ -866,6 +1000,10 @@ private:
 				obs_source_release(filter_);
 				filter_ = nullptr;
 			}
+			/* 3.1.40：**故意不清 bound_source_ / bound_filter_**。
+			 * 源被移除重建后名字往往不变，留着这两个名字，
+			 * 滑块回调的 try_light_rebind() 和窗口激活的
+			 * validate_binding() 才有重连的锚点。 */
 			combo_->setEnabled(false);
 			set_hint(QString::fromUtf8(
 				"没有找到美颜滤镜实例。请先给摄像头源添加「OBS美颜」滤镜，"
@@ -904,8 +1042,17 @@ private:
 		filter_ = obs_source_get_filter_by_name(src, insts_[idx].filter.c_str());
 		/* obs_source_get_filter_by_name 已经返回新引用，不要再 get_ref，否则泄漏 */
 		obs_source_release(src);
+		/* 3.1.40：只有真正拿到实例才覆盖记忆。拿不到时保留上一次的名字，
+		 * 这样源/滤镜重建后仍有重连锚点；同时复位告警限流，
+		 * 保证新绑定万一再次失效能立刻再报一次。 */
+		if (filter_) {
+			bound_source_ = insts_[idx].source;
+			bound_filter_ = insts_[idx].filter;
+			last_no_filter_warn_ = 0;
+		}
 		/* 3.0.20：原来这句还承诺「滑块双击可回到默认值」，但代码里从来没有
-		 * mouseDoubleClickEvent —— 那是一条空承诺，删掉比留着误导读者好。 */
+		 * mouseDoubleClickEvent —— 那是一条空承诺，删掉比留着误导读者好。
+		 * 3.1.40：set_hint(空) 顺带清掉上一次的红字告警。 */
 		set_hint(QString());
 		update_version_label();
 		build_form();
@@ -947,10 +1094,14 @@ private:
 		ver_->setText(text);
 	}
 
-	/* ---- 写回单个参数：取全量设置 -> 改一个键 -> 更新滤镜 ---- */
+	/* ---- 写回单个参数：取全量设置 -> 改一个键 -> 更新滤镜 ----
+	 * 3.1.40：四个入口统一走 ensure_binding()。旧版 `if (!filter_) return;`
+	 * 会在绑定失效时静默丢掉整次拖动，用户看不到任何反馈；现在要么
+	 * 自动重连后照常写回，要么打明确日志 + 面板红字提示去点「刷新」。
+	 * 注意 ensure_binding() 全程不碰 Qt 控件，滑块回调里调用是安全的。 */
 	void apply_double(const char *key, double v)
 	{
-		if (!filter_)
+		if (!ensure_binding(key))
 			return;
 		obs_data_t *s = obs_source_get_settings(filter_);
 		obs_data_set_double(s, key, v);
@@ -959,7 +1110,7 @@ private:
 	}
 	void apply_int(const char *key, long long v)
 	{
-		if (!filter_)
+		if (!ensure_binding(key))
 			return;
 		obs_data_t *s = obs_source_get_settings(filter_);
 		obs_data_set_int(s, key, v);
@@ -968,7 +1119,7 @@ private:
 	}
 	void apply_bool(const char *key, bool v)
 	{
-		if (!filter_)
+		if (!ensure_binding(key))
 			return;
 		obs_data_t *s = obs_source_get_settings(filter_);
 		obs_data_set_bool(s, key, v);
@@ -977,7 +1128,7 @@ private:
 	}
 	void apply_string(const char *key, const char *v)
 	{
-		if (!filter_)
+		if (!ensure_binding(key))
 			return;
 		obs_data_t *s = obs_source_get_settings(filter_);
 		obs_data_set_string(s, key, v);
@@ -987,7 +1138,7 @@ private:
 
 	void reset_defaults()
 	{
-		if (!filter_)
+		if (!ensure_binding("reset_defaults"))
 			return;
 		/* 3.1.25：修「点了恢复默认没反应」。
 		 *
