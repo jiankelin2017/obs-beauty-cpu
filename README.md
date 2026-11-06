@@ -27,7 +27,7 @@
 | UI 显式标识 | 编译期宏 `BEAUTY_UI_CPU_EDITION=1` 时，菜单「美颜·CPU(&A)」、窗口标题、蓝色 `CPU 版` 徽章、版本角标 `CPU v1.0.0.0`；默认 `0` 时行为零变化 |
 | 当前构建产物 | `02_构建/build_1.0.0.0/`（`obs-beauty.dll` 441,856 B / `obs-beauty-ui.dll`） |
 | 当前安装包 | `06_安装包/OBS美颜_CPU_v1.0.0.0.exe`（3,637,129 B，版本资源四段 `1.0.0.0`） |
-| 许可 | 动态链接 libobs → **GPL-2.0**（`LICENSE`）。**许可口径存在冲突，见 §8 待人工确认项** |
+| 许可 | 根 `LICENSE` 逐字为 **GPL-2.0**；但仓库内三处口径互斥、**尚未裁定**，见 `docs/reference/reference-licensing.md` §2 与 §8 第 1 项 |
 
 ---
 
@@ -171,6 +171,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | CPU 性能设计 | `docs/design/design-cpu-performance.md` |
 | 安装包构建指南 | `docs/guides/guide-build-installer.md` |
 | 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` |
+| 许可与第三方组件口径 | `docs/reference/reference-licensing.md` |
 | 历史原件（只读） | `docs/archive/` |
 
 **可信度顺序**：逐字源码 > 动态实测 > 推断 > 拟合（`01_源码\` > 本 README > `04_文档\`）。
@@ -195,7 +196,9 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 > 新产物目录不再需要靠显式 `git add` 规避，但提交前仍应跑 `--staged` 闸门。
 
 第三方组件：ONNX Runtime / YuNet（MIT，随包分发）、OBS Studio libobs（GPL-2.0，宿主，不随仓库分发）、
-`07_开源参考\` 内 MIT 许可原文。GPL-2.0 参考仓库只读思路、未抄代码。完整出处与许可明细见
+`07_开源参考\` 内 MIT 许可原文。GPL-2.0 参考仓库只读思路、未抄代码。
+**当前版的许可事实、三处口径冲突与可执行约束见 `docs/reference/reference-licensing.md`**；
+历史出处与组件明细（历史轴 `3.1.x`，未在 CPU `1.0.0.0` 复核）只读见
 `docs/archive/readme-archive-20261106.md` §16。
 
 ---
@@ -210,7 +213,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 
 | # | 项 | 说明 |
 |---|---|---|
-| 1 | **许可口径冲突** | 旧仓库入口声明「个人学习、研究与本地自用，不得商用或再分发」，根 README 历史版声明「动态链接 libobs → GPL-2.0 发布」。两者矛盾，需确定对外口径后再统一。 |
+| 1 | **许可口径冲突** | 三处互斥：根 README / 历史 README §16.1 的「动态链接 libobs → GPL-2.0，源码须以 GPLv2 提供」；旧入口 §1 的「不得商用或再分发」；开源清单 §4 / 方案边界 §1 的「闭源分发且按可商用再分发选型」。详见 `docs/reference/reference-licensing.md` §2、§5，**确定对外口径后再统一，不得据任一处对外宣称**。 |
 | 2 | CPU `1.0.0.0` 装机脚本 | `03_装机\` 无对应版本脚本；真机装/卸、`e2e_test.ps1` 对新包未跑过回归。 |
 | 3 | 性能与画质数字 | `6.43 / 7.25 / 7.11 / 9.48 ms`、`79.0 / 70.2 分`、`14/14` 均为**历史轴引擎层口径**，未在 CPU `1.0.0.0` 上重测；口径互不通用，勿混用。 |
 | 4 | 已知遗留 | 旧入口记录的「磨皮=0 时锐化滑块无效」「浅色主题未复核」「美白补 6.5%」「祛斑痘/亮眼素材信号在噪声级」均属历史轴，需在当前代码上逐项复核是否仍存在。 |
@@ -237,9 +240,16 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `04_文档/方案A_GPU移植开发计划.md` | 第 2 批归档 `docs/archive/gpu-porting-plan-20261106.md`（与纯 CPU 方向冲突、从未开工） |
 | `04_文档/面板使用说明.md` | 第 2 批归档 `docs/archive/ui-html-websocket-proposal-20261106.md`（未采用的 HTML+websocket 方案，引用脚本与路径全部不存在） |
 | `04_文档/方案边界调整_开源可商用.md` | 第 2 批归档 `docs/archive/opensource-boundary-20261106.md`（§4「CPU 不能实时」结论已被实测推翻；许可判据 / 选型表 / 体积对比待第 3 批合并） |
-| `04_文档/验收报告_v3.1.34.md`、`复刻评分_v3.1.39.md` | 第 2 批归档 `docs/archive/acceptance-quality-20261106.md`、`scorecard-20261106.md`（历史轴数字，CPU `1.0.0.0` 未重测） |
+| `04_文档/验收报告_v3.1.34.md`、`复刻评分_v3.1.39.md` | 第 2 批归档 `docs/archive/acceptance-quality-20261106.md`、`docs/archive/scorecard-20261106.md`（历史轴数字，CPU `1.0.0.0` 未重测） |
+| `04_文档/开源参考仓库_对照与可复用清单.md` | 第 3 批归档 `docs/archive/oss-survey-20261106.md`（§0–3 / §5 的 GPU 化论证与纯 CPU 方向冲突；§4 许可证红线已并入当前版；§7 / §8 算法差异点待第 4 批引用） |
+| `04_文档/D1_我们自己的技术线路.md` | 第 3 批归档 `docs/archive/tech-roadmap-20261106.md`（「不上 GPU」结论与当前方向一致；按 B 方案不另建 roadmap 当前版，证伪结论留归档头待第 4 批引用） |
+| `04_文档/S1_掩码对拍结论.md`、`S2_磨皮核对拍结论.md`、`S3_对拍口径修正_结论.md` | 第 3 批归档 `docs/archive/ab-mask-20261106.md`、`docs/archive/ab-smooth-20261106.md`、`docs/archive/ab-metric-20261106.md`（`ab-*` 命名避开与 `D1` §4 步骤编号的同名异义；证伪 / 口径结论留归档头待第 4 批引用） |
+| `docs/archive/opensource-boundary-20261106.md` §1 / §2、`oss-survey` §4 | **已合并自**（2026-11-06，第 3 批）：许可判据、选型表、许可证红线 → 新建 `docs/reference/reference-licensing.md`（仅许可部分，被推翻的 GPU 化结论未带入） |
+| `docs/design/design-cpu-performance.md` §7 | 第 3 批增量更新：旧引用改指 `docs/archive/oss-survey-20261106.md` §3，补注「历史轴 GPU 化推算、不得据此施工」的有效性边界（**原文未删改、未润色**） |
 
 ---
 
 *本文只描述 CPU `1.0.0.0` 当前有效结论。历史细节、评分口径、版本演进史、20 条雷区见 §9 所列归档件；
-所有未在 §8 标注的「当前结论」均可在 `01_源码\`、`02_构建\`、`06_安装包\` 中逐字核对。*
+所有未在 §8 标注的「当前结论」均可在 `01_源码\`、`02_构建\`、`06_安装包\` 中逐字核对。
+**许可为例外**：§0 只登记 `LICENSE` 的逐字内容，`docs/reference/reference-licensing.md` 只并列三处冲突，
+两者都**不是对外许可结论**。*
