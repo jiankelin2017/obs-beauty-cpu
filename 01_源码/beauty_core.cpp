@@ -149,16 +149,40 @@ inline float lvLerp5(const float tbl[5], float t) {
     return tbl[i] + (tbl[i + 1] - tbl[i]) * f;
 }
 
+// 七锚点非均匀表（1.0.0.1 低档段重标定）。
+// 为什么不能继续用等距 5 锚点：把 25 档锚点从 0.020 抬到约 0.081 能修好
+// 「低档零响应」，但 25→50 之间只有一条直线，40 档会被抬得过高。产品低档段
+// 的 I(t) 斜率依次约为 0.719 / 0.299 / 0.844，不是常数，因此必须在
+// t=0.25~0.50 之间加密锚点。50/75/100 三档的锚点值与斜率保持原样，
+// 使高档输出逐字节不变。
+static const float kLvKnot7[7] = {
+    0.00f, 0.25f, 0.30f, 0.40f, 0.50f, 0.75f, 1.00f
+};
+inline float lvLerp7(const float tbl[7], float t) {
+    if (t <= 0.0f) return tbl[0];
+    if (t >= 1.0f) return tbl[6];
+    for (int i = 0; i < 6; i++) {
+        if (t <= kLvKnot7[i + 1]) {
+            const float span = kLvKnot7[i + 1] - kLvKnot7[i];
+            const float f = (t - kLvKnot7[i]) / span;
+            return tbl[i] + (tbl[i + 1] - tbl[i]) * f;
+        }
+    }
+    return tbl[6];
+}
+
 // "a,b,c,d,e" → 5 个 float。缺项保持原值，便于只覆盖其中几个锚点。
-inline void parse5(const char* s, float out[5]) {
+inline void parseN(const char* s, float* out, int n) {
     if (!s || !*s) return;
     const char* p = s;
-    for (int i = 0; i < 5 && p && *p; i++) {
+    for (int i = 0; i < n && p && *p; i++) {
         out[i] = (float)atof(p);
         const char* q = strchr(p, ',');
         p = q ? (q + 1) : nullptr;
     }
 }
+inline void parse5(const char* s, float out[5]) { parseN(s, out, 5); }
+inline void parse7(const char* s, float out[7]) { parseN(s, out, 7); }
 
 // 自研核参数：CoreEngine 与离线调参入口共用。默认值 = 离线对拍最佳组合。
 struct SmoothCfg {
@@ -378,6 +402,14 @@ struct SmoothCfg {
     // 表可在运行时被 BEAUTY_S3_LV_I / BEAUTY_S3_LV_T 覆盖（离线扫参用）。
     int   lvTable = 1;
     float lvI[5] = {0.000f, 0.020f, 0.240f, 0.577f, 0.976f};
+    // 1.0.0.1：低档段非均匀锚点表。数值来自 8 帧产品真值的 I→chg 曲线反解
+    // （05_验证/goldens/masks/shape_inverse_20261106.md §3），25/30/40 档分别
+    // 为 0.080566 / 0.116538 / 0.146446；50/75/100 档沿用旧表的 0.240/0.577/0.976，
+    // 且 0.50→0.75、0.75→1.00 两段斜率与旧表一致，因此三档输出逐字节不变。
+    // lvShape=0 回退到旧五锚点表，供 A/B 与历史报告复现。
+    int   lvShape = 1;
+    float lvI7[7] = {0.000f, 0.080566f, 0.116538f, 0.146446f,
+                     0.240f, 0.577f, 0.976f};
     // 3.1.19：T 由 8.3 → 6.5。T 是唯一能改「平坦/纹理相对强度」的旋钮
     // （I 与 e 只等比缩放）：8.3 时平坦/纹理比 1.09，产品是 1.39。T 降到
     // 6.5 把拐点前移，代价是总量掉 15%，由 e 补回 —— 见下。
@@ -982,8 +1014,8 @@ public:
     const char* id() const override { return "core"; }
     // 1.4.0 → 1.4.1（3.1.40）：无脸帧改走逐字节透传，不再全帧兜底磨皮。
     // 门控语义变了 ⇒ 无脸帧的画面输出与 1.4.0 不同，旧的对拍数字不覆盖这条路径。
-    // 引擎版本并入 CPU 单轴（1.0.0.0），不再维护独立的 core 1.4.x 号。
-    const char* version() const override { return "1.0.0.0"; }
+    // 引擎版本并入 CPU 单轴（当前 1.0.0.1），不再维护独立的 core 1.4.x 号。
+    const char* version() const override { return "1.0.0.1"; }
 
     bool ensureReady(std::string& err) override {
         // 人脸检测模型只试一次。失败不阻止引擎就绪 —— 降级为「无掩码，全帧磨皮」，
@@ -1136,6 +1168,12 @@ public:
             parse5(getenv("BEAUTY_S3_LV_I"), g_cfg.lvI);
             parse5(getenv("BEAUTY_S3_LV_T"), g_cfg.lvT);
             parse5(getenv("BEAUTY_S3_LV_E"), g_cfg.lvE);
+            // 1.0.0.1 低档段形状开关。BEAUTY_S3_LV_SHAPE=0 回退旧五锚点表
+            // （历史报告用 "0,<v>" 覆盖 BEAUTY_S3_LV_I 的语义因此完全不变）；
+            // BEAUTY_S3_LV_I7 单独覆盖新的七锚点表，供离线扫参与复现。
+            const char* lvs = getenv("BEAUTY_S3_LV_SHAPE");
+            if (lvs && *lvs) g_cfg.lvShape = (lvs[0] != '0') ? 1 : 0;
+            parse7(getenv("BEAUTY_S3_LV_I7"), g_cfg.lvI7);
             const char* sef = getenv("BEAUTY_S3_E_FIX");
             if (sef && *sef) g_cfg.s3EFix = (float)atof(sef);
             const char* gwp = getenv("BEAUTY_S3_GWP");
@@ -1508,7 +1546,8 @@ public:
                 if (g_cfg.lvTable) {
                     // 3.1.18：档位查表。旧式 min(1, t/0.7) 在 t≥0.7 就恒为 1，
                     // 75 与 100 档输出逐字节相同 —— 那是「拉满没反应」的根因。
-                    I = lvLerp5(g_cfg.lvI, tLin);
+                    I = g_cfg.lvShape ? lvLerp7(g_cfg.lvI7, tLin)
+                                      : lvLerp5(g_cfg.lvI, tLin);
                 } else {
                     I = (tLin >= g_cfg.s3ESat) ? 1.0f : (tLin * g_cfg.s3K);
                 }

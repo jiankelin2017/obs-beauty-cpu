@@ -1,13 +1,13 @@
 ﻿; ============================================================================
-;  OBS美颜 CPU 版 安装包  v1.0.0.0  (NSIS 3 / Unicode)
+;  OBS美颜 CPU 版 安装包  v1.0.0.1  (NSIS 3 / Unicode)
 ;
 ;  装什么（4 个文件 + 文档 + 卸载器）：
-;    obs-beauty.dll      = 滤镜本体（CPU 版 1.0.0.0）
+;    obs-beauty.dll      = 滤镜本体（CPU 版 1.0.0.1）
 ;    onnxruntime.dll     = 自研引擎运行时（必须与滤镜 DLL 同目录）
 ;    models\yunet.onnx   = 人脸检测模型（必须落在 models\ 子目录）
 ;    obs-beauty-ui.dll   = 参数面板（ProgramData 下的插件目录）
 ;
-;  版本轴：CPU 线 1.0.0.0（四段式，见 01_源码\beauty_params.h），
+;  版本轴：CPU 线 1.0.0.1（四段式，见 01_源码\beauty_params.h），
 ;  与 GPU 版 3.0.1 独立，不可互比。引擎 core 已并入这条单轴。
 ;
 ;  为什么这几个位置不能改（见 04_文档\C13_装机链路.md §2）：
@@ -49,19 +49,19 @@ SetDatablockOptimize on
 ; 「程序和功能」里留下两条重复项。
 !define APPID        "OBSBeauty.NamaBeauty"
 ; 版本号由 build_setup.ps1 用 /D 传进来 —— 只在一处维护。
-; CPU 线用四段式 1.0.0.0；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
+; CPU 线用四段式 1.0.0.1；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
 ; 手工编译（直接跑 makensis）时用下面这几个兜底值。
 !ifndef PKGVER
-  !define PKGVER     "1.0.0.0"
+  !define PKGVER     "1.0.0.1"
 !endif
 !ifndef FILTERVER
-  !define FILTERVER  "1.0.0.0"
+  !define FILTERVER  "1.0.0.1"
 !endif
 !ifndef PANELVER
-  !define PANELVER   "1.0.0.0"
+  !define PANELVER   "1.0.0.1"
 !endif
 !ifndef COREVER
-  !define COREVER    "1.0.0.0"
+  !define COREVER    "1.0.0.1"
 !endif
 !define PUBLISHER    "OBS Beauty (personal build)"
 !define ESTSIZE      12250            ; KB，控制面板里显示的大小（4 个文件约 12.2 MB）
@@ -114,7 +114,7 @@ ShowInstDetails show
 ShowUninstDetails show
 BrandingText "${APPNAME} ${EDITION} ${PKGVER}  ·  滤镜 ${FILTERVER} + 面板 ${PANELVER} + 引擎 ${COREVER}"
 
-; PKGVER 已是四段式 1.0.0.0，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
+; PKGVER 已是四段式 1.0.0.1，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
 VIProductVersion "${PKGVER}"
 VIAddVersionKey /LANG=2052 "ProductName"     "${APPNAME} ${EDITION}"
 VIAddVersionKey /LANG=2052 "ProductVersion"  "${PKGVER}"

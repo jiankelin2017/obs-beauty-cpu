@@ -53,7 +53,7 @@ set PATH=%VSBASE%\bin\Hostx64\x64;%QT%\bin;%PATH%
 set INCLUDE=%VSBASE%\include;%SDKBASE%\Include\%SDKVER%\ucrt;%SDKBASE%\Include\%SDKVER%\um;%SDKBASE%\Include\%SDKVER%\shared;%SDKBASE%\Include\%SDKVER%\winrt
 set LIB=%VSBASE%\lib\x64;%SDKBASE%\Lib\%SDKVER%\ucrt\x64;%SDKBASE%\Lib\%SDKVER%\um\x64
 
-rem CPU 1.0.0.0 builds set BEAUTY_OUTDIR to a separate folder so the
+rem CPU four-segment builds set BEAUTY_OUTDIR to a separate folder so the
 rem frozen 3.1.40 DLLs in build_output are never overwritten.
 rem With BEAUTY_OUTDIR unset this behaves exactly as before.
 set OUT=%HERE%build_output
