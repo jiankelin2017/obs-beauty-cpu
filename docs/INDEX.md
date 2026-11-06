@@ -6,7 +6,7 @@
 | 最后更新 | 2026-11-06 |
 | 适用代码版本 | CPU 线 `1.0.0.0`（提交 `5323856`） |
 | 维护人 | 待人工确认 |
-| 状态 | `Active`（**第 4 批已完成；`04_文档/` tracked 待治理清零；第 6 项防腐化哨兵已落地**） |
+| 状态 | `Active`（**第 4 批已完成；`04_文档/` tracked 待治理清零；第 6 项防腐化哨兵已落地；单独清理批已收口历史数字**） |
 | 替代文档 | 无（新建） |
 
 > **本表是全库文档体系的唯一入口。** 查「哪篇是现状」看 §1；查历史原件看 §2；
@@ -52,7 +52,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 |---|---|---|---|---|---|---|---|
 | 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md` |
 | 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/changelog-raw-20261106.md` |
-| CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（数字待重测） | CPU `1.0.0.0`；文内数字测于历史轴 `3.1.x` | 待人工确认 | 2026-11-06 | 原 `04_文档\C1_CPU性能优化.md`；§7 断链已于第 3 批纠正；**第 4B 批并入 `docs/archive/c10-async-detect-20261106.md`（§8）** |
+| CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（架构 / 开关有效；历史轴数字未重测） | CPU `1.0.0.0`（当前版零历史实测数字） | 待人工确认 | 2026-11-06 | 重写前全文见 `docs/archive/c1-cpu-performance-20261106.md`；第 4B 批并入 `docs/archive/c10-async-detect-20261106.md`（§8）；单独清理批整篇重写、§8 编号不变 |
 | 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并且替代 `c02` / `c04` / `c07` / `c08` / `c15` 五篇归档件 |
 | 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c06` / `c09` / `c11`，引用 `c03` 与 `oss-survey` §8.4 |
 | 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c03` / `c05` / `c12` / `c20` / `c21`，引用 `ab-mask` / `c02` / `c19` |
@@ -106,8 +106,9 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 真机尺度对拍（原 `C19`） | `docs/archive/c19-camera-scale-ab-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-quality-findings.md`；⚠️ **根因结论已被 `c20` 推翻，不得据此施工** |
 | 皮肤掩码白平衡依赖（原 `C20`） | `docs/archive/c20-whitebalance-rootcause-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md`（最终根因）；结论仍有效 |
 | 自适应肤色中心落地（原 `C21`） | `docs/archive/c21-adaptive-skin-center-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md`；当前仍有效的实现 |
+| CPU 性能优化重写前全文（原 `C1`，含附录 A / B） | `docs/archive/c1-cpu-performance-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 1.4.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-cpu-performance.md`；单独清理批逐字保全，历史实测数字只在此查 |
 
-> **归档件合计 34 篇**，正文一字未改，仅在文首追加废弃标注块；历史评分口径、版本演进史、
+> **归档件合计 35 篇**，正文一字未改，仅在文首追加废弃标注块；历史评分口径、版本演进史、
 > 20 条雷区、许可明细出处、全部历史轴数字表格均可在此查证。
 > 第 2 批 `opensource-boundary` 的许可差异点已在第 3 批并入 `docs/reference/reference-licensing.md`；
 > `scorecard` 的评分公式与历史分数口径经 2026-11-06 裁定**不抽成当前版、不长期保留**。
@@ -115,6 +116,9 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 > **均已在第 4B 批闭合**；归档头属当时状态标注，**不回改归档件**。
 > 第 4 批归档件全部为历史轴 `3.1.x / CoreEngine 0.x` 口径，其证伪结论、`S1/S2/S3` 同名异义陷阱、
 > 证伪链（`c19` 根因被 `c20` 推翻、`c21` 落地）已在 4 份 design 当前版中逐条引用。
+> **单独清理批新增 `c1-cpu-performance-20261106.md`**：逐字保全 `design-cpu-performance.md`
+> 重写前全文（含 `3.1.40` 修补附录 A），是当前版删去的历史加速比 / 耗时 / SHA256 /
+> 离线 A/B 表的唯一查证处；`docs/design/` 5 份当前版至此**全部为零历史数字表格**。
 
 ---
 
@@ -130,6 +134,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 第 3 批（B 方案） | 归档 5 篇、新建 `reference-licensing.md`、修 §7 断链 | 29 → 24 篇（19 tracked + 5 Excluded） | `84360b1` |
 | **第 4A 批** | 19 篇 C 系列 `git mv` 到 `docs/archive/cNN-*-20261106.md` 并加 `ARCHIVED` 头 | 归档总数 **15 → 34**；正文 CRLF 归一化后 **19/19 MATCH**；`04_文档/` 只剩 5 篇 Excluded | `bca2d6f` |
 | **第 4B 批** | 新建 4 份 `design-*.md`；`c10` 并入 `design-cpu-performance.md` §8；同步本表与根 `README.md` | **tracked 待治理清零**；4A 头的临时断链闭合；当前版不搬任何历史轴数字表格 | 本次提交 |
+| **单独清理批（第 5 批）** | 新建 `c1-cpu-performance-20261106.md` 逐字保全重写前全文；整篇重写 `design-cpu-performance.md`；清空 `check_docs.py` 数字表格白名单 | **当前版历史数字全部清零**；归档件 34 → 35；§8 异步检测编号不变，既有引用无需改 | 本次提交 |
 
 - 第 4 批方案经用户确认：`1.A`（19 篇全归档但必须新建当前版）、`2.照上表`、
   `3.C10 并入 design-cpu-performance.md`、`4.完全不搬数字表格`、`5.两次提交`。
@@ -184,6 +189,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 2026-11-06 | 第 4A 批：登记 19 篇 `Deprecated`（`c02`~`c21`）；归档总数 15 → 34；`04_文档\` tracked 清零，仅剩 5 篇 Excluded；单独提交 `bca2d6f` |
 | 2026-11-06 | 第 4B 批：登记新增 4 篇 `Active`（`design-smoothing` / `design-tone-detail` / `design-face-mask` / `design-quality-findings`）；`design-cpu-performance.md` 登记「并入 `c10`」；闭合第 3 批 5 篇与第 4A 批 19 篇归档头的「待第 4 批」标注；§3 改为已完成记录；§0 补「当前版数字」规则、§5 补第 6 条维护约定 |
 | 2026-11-06 | 治理输出第 6 项（方案 B）：新增 `05_验证/check_docs.py`（六条断言、纯标准库、只读、负向测试通过）；§0 补「自动校验」规则与统一文档头模板，§5 补第 7 条提交前双闸门；根 `README.md` §2.4 / §5 / §9 同步 |
+| 2026-11-06 | 单独清理批（第 5 批，方案 B）：新增 `docs/archive/c1-cpu-performance-20261106.md`（逐字保全重写前全文）；整篇重写 `docs/design/design-cpu-performance.md` 为零历史数字口径（§8 编号保留）；`05_验证/check_docs.py` 清空数字表格白名单并升 `0.1.1`；本表 §1 / §2 / §3 同步，归档件 34 → 35；根 `README.md` §5 / §8 / §9 与 `docs/design/design-face-mask.md` 引用同步 |
 
 ---
 

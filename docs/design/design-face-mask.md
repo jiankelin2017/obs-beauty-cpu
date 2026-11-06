@@ -64,7 +64,7 @@
 
 - `BEAUTY_MASK_ALIGN=0`：回到「当前帧 + 旧掩码」（有拖影但零延迟，A/B 用）。
 - `BEAUTY_MASK_EVERY`：异步检测提交周期；源码注释给出的老节奏回退值可用于真机当场对比，无需改代码重编译。
-- `BEAUTY_ASYNC_DETECT`、`BEAUTY_NOFACE_SKIP` 的当前口径见 `docs/design/design-cpu-performance.md` §8 / 附录 A。
+- `BEAUTY_ASYNC_DETECT` 的当前口径见 `docs/design/design-cpu-performance.md` §8；`BEAUTY_NOFACE_SKIP` 及无脸帧透传的历史判据见 `docs/archive/c1-cpu-performance-20261106.md` 附录 A（当前口径以 `01_源码/` 为准）。
 
 ## 6. 五官局部五项（`c12`）
 

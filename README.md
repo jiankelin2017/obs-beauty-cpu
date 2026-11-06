@@ -173,7 +173,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 |---|---|
 | 本 README（唯一） | `README.md` |
 | 变更日志（全局唯一） | `docs/CHANGELOG.md` |
-| CPU 性能设计（含异步检测 §8） | `docs/design/design-cpu-performance.md` |
+| CPU 性能设计（含异步检测 §8；零历史实测数字） | `docs/design/design-cpu-performance.md` |
 | 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` |
 | 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` |
 | 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` |
@@ -190,9 +190,13 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 > 扫参表、保留率、耗时、IoU 等历史实测数据只在 `docs/archive/` 查（2026-11-06 裁定）。
 > 开关名与默认值已按当前源码逐字复核，例如幅度门控上限是配置字段 `freqMagHi`、
 > 环境变量为 `BEAUTY_FREQ_MAG`，**不存在 `BEAUTY_FREQ_MAG_HI`**。
+> **单独清理批（第 5 批）已把最后一篇含历史数字表格的 `docs/design/design-cpu-performance.md`
+> 整篇重写**，重写前全文（含 `3.1.40` 修补附录）逐字保全于
+> `docs/archive/c1-cpu-performance-20261106.md`；至此 `docs/design/` 5 份当前版**全部零历史实测数字**，
+> `05_验证/check_docs.py` 的数字表格白名单也已清空。
 
 **防腐化**：`docs/INDEX.md` §0 有统一文档头模板与自动校验规则，§5 有 7 条维护约定；
-`05_验证/check_docs.py`（`0.1.0`）把「新增文档漏登记 INDEX / 归档件没写替代指向 / 改路径留断链 /
+`05_验证/check_docs.py`（`0.1.1`）把「新增文档漏登记 INDEX / 归档件没写替代指向 / 改路径留断链 /
 命名跑偏」变成提交前可拦截的断言。该脚本自身版本与 CPU 产品版本轴互不相干，产品轴仍 `1.0.0.0`。
 
 ---
@@ -234,7 +238,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 |---|---|---|
 | 1 | **许可口径冲突** | 三处互斥：根 README / 历史 README §16.1 的「动态链接 libobs → GPL-2.0，源码须以 GPLv2 提供」；旧入口 §1 的「不得商用或再分发」；开源清单 §4 / 方案边界 §1 的「闭源分发且按可商用再分发选型」。详见 `docs/reference/reference-licensing.md` §2、§5，**确定对外口径后再统一，不得据任一处对外宣称**。 |
 | 2 | CPU `1.0.0.0` 装机脚本 | `03_装机\` 无对应版本脚本；真机装/卸、`e2e_test.ps1` 对新包未跑过回归。 |
-| 3 | 性能与画质数字 | `6.43 / 7.25 / 7.11 / 9.48 ms`、`79.0 / 70.2 分`、`14/14` 均为**历史轴引擎层口径**，未在 CPU `1.0.0.0` 上重测；口径互不通用，勿混用。第 4 批 4 份 `docs/design/design-*.md` 的结论同样来自历史轴归档头登记，**当前轴未重跑 golden A/B / 性能 A/B / 真机对拍**；历史数字一律只在 `docs/archive/` 查。 |
+| 3 | 性能与画质数字 | 历史轴引擎层实测数字（耗时 / 加速比 / SHA256 / 评分口径，含 `79.0 / 70.2 分`、`14/14`）均未在 CPU `1.0.0.0` 上重测，口径互不通用、勿混用；**当前版 `docs/design/` 5 份已全部清零，一律只在 `docs/archive/` 查**（`C1` 原件见 `docs/archive/c1-cpu-performance-20261106.md`）。第 4 批 4 份 `docs/design/design-*.md` 的结论同样来自历史轴归档头登记，**当前轴未重跑 golden A/B / 性能 A/B / 真机对拍**。 |
 | 4 | 已知遗留 | 旧入口记录的「磨皮=0 时锐化滑块无效」「浅色主题未复核」「美白补 6.5%」「祛斑痘/亮眼素材信号在噪声级」均属历史轴，需在当前代码上逐项复核是否仍存在。 |
 | 5 | ~~旧版 GPU 移植计划~~ | ✅ **已关闭（第 2 批）**：`04_文档\方案A_GPU移植开发计划.md` 已归档为 `docs/archive/gpu-porting-plan-20261106.md`，文首标「与纯 CPU 方向冲突、从未开工、不得据此施工」。 |
 | 6 | ~~`.gitignore` 构建产物规则~~ | ✅ **已关闭（提交 `e14f3f2`）**：已补 `02_构建/build_*/` 并回归 `check_upload.py`，详见 §6。 |
@@ -254,7 +258,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `04_文档/验收报告_v3.1.39.md`、`验收报告_安装包v3.1.39.md` | 归档为历史版本验收记录（`docs/archive/`） |
 | `04_文档/CHANGELOG_提交记录.md` | 2532 行流水账整体归档；里程碑提炼进 `docs/CHANGELOG.md` |
 | `06_安装包/README_打包说明.md` | 按 CPU `1.0.0.0` 重写为 `docs/guides/guide-build-installer.md` |
-| `04_文档/C1_CPU性能优化.md` | 补元数据、纠正过时路径，改为 `docs/design/design-cpu-performance.md` |
+| `04_文档/C1_CPU性能优化.md` | 首批补元数据、纠正过时路径，改为 `docs/design/design-cpu-performance.md`；**单独清理批（第 5 批）**又整篇重写为零历史数字口径，重写前全文逐字保全为 `docs/archive/c1-cpu-performance-20261106.md` |
 | `04_文档/顶层菜单插件说明.md` | **已合并自**（2026-11-06，第 2 批）：改写为 `docs/guides/guide-ui.md`；保留机制 / 三个坑 / 目录名坑，按 CPU 宏分列菜单与角标口径，删除已失效的「底层 SDK 全局状态」限制 |
 | `04_文档/方案A_GPU移植开发计划.md` | 第 2 批归档 `docs/archive/gpu-porting-plan-20261106.md`（与纯 CPU 方向冲突、从未开工） |
 | `04_文档/面板使用说明.md` | 第 2 批归档 `docs/archive/ui-html-websocket-proposal-20261106.md`（未采用的 HTML+websocket 方案，引用脚本与路径全部不存在） |
@@ -272,6 +276,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `docs/archive/c14` / `c16` / `c17` / `c18` / `c19`（并引用 `ab-metric` / `ab-smooth` / `c20` / `c21`） | **第 4B 批**：归并为 `docs/design/design-quality-findings.md`；只留证伪链与口径纪律，**不搬历史轴数字表格** |
 | `docs/archive/c10-async-detect-20261106.md` | **第 4B 批**：并入 `docs/design/design-cpu-performance.md` 新增 §8（不新建 design 文件）；登记抢核副作用、确定性与 stagesurface 往返盲区 |
 | 治理输出第 6 项（方案 B） | 新建 `05_验证/check_docs.py`（六条断言、纯标准库、只读、负向测试通过）；`docs/INDEX.md` §0 补统一文档头模板与自动校验规则、§5 补第 7 条提交前双闸门；本 README §2.4 / §5 同步。未引入 hook / CI，不改变提交行为 |
+| 单独清理批（第 5 批，方案 B） | 新建 `docs/archive/c1-cpu-performance-20261106.md`（逐字保全重写前全文，含 `3.1.40` 修补附录 A）；整篇重写 `docs/design/design-cpu-performance.md`，删净历史加速比 / 耗时 / SHA256 / 离线 A/B 表，§8 异步检测按原文保留且编号不变；`05_验证/check_docs.py` 清空数字表格白名单并升 `0.1.1`；`docs/INDEX.md`、`docs/design/design-face-mask.md` 与本文 §5 / §8 / §9 同步。归档件 34 → 35，CPU 产品轴仍 `1.0.0.0` |
 
 ---
 

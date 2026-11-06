@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_docs.py 0.1.0 —— 文档体系一致性自检（防腐化哨兵）
+"""check_docs.py 0.1.1 —— 文档体系一致性自检（防腐化哨兵）
 
 为什么需要它
 ------------
@@ -15,7 +15,7 @@
 3. `docs/INDEX.md` 与实际文件双向一致（漏登记 / 孤儿归档 / 状态标记）
 4. 所有 `` `docs/....md` `` 反引号引用 0 断链
 5. 命名规范：主目录 `类型-主题.md`；归档 `主题-YYYYMMDD.md`
-6. 当前版数字表格（**只告警、不阻断**）；`design-cpu-performance.md` 首批保留的表格列白名单
+6. 当前版数字表格（**只告警、不阻断**）；0.1.1 起白名单清空，全部 design/guides/reference 纳入扫描
 
 用法
 ----
@@ -25,7 +25,8 @@
 退出码：0 = 无阻断项（可含告警）；1 = 存在必须修复的阻断项。
 纯标准库、无第三方依赖；只读，不修改任何文件。
 
-版本：0.1.0（新建脚本的起始版本；CPU 产品版本轴仍由 `01_源码/beauty_params.h` 单点维护）
+版本：0.1.1（普通升级：清空数字表格白名单，哨兵覆盖全部当前版；CPU 产品版本轴仍由
+`01_源码/beauty_params.h` 单点维护，与脚本自身版本互不相干）
 """
 import argparse
 import os
@@ -45,7 +46,10 @@ ANY_MD_RE = re.compile(r'`([^`\s]+\.md)`')
 MAIN_NAME_RE = re.compile(r'^(design|guide|reference|adr)-[a-z0-9\-]+\.md$')
 ARCH_NAME_RE = re.compile(r'^[a-z0-9\-]+-\d{8}\.md$')
 NUM_ROW_RE = re.compile(r'\d+(?:\.\d+)?\s*(?:%|ms|pp|倍)')
-NUMERIC_WHITELIST = frozenset({'docs/design/design-cpu-performance.md'})
+# 0.1.0：首批保留的 design-cpu-performance.md 历史数字表格曾列白名单。
+# 0.1.1：单独清理批已把该文重写为零历史数字，白名单随之清空；
+# 此后任何当前版 design/guides/reference 出现数字表格都会被第 6 条告警。
+NUMERIC_WHITELIST = frozenset()
 
 
 def read(rel):
@@ -266,8 +270,10 @@ def main():
         for p, i, line in warns[:20]:
             print('    %s:%d  %s' % (p, i, line))
     else:
-        print('[6] 当前版数字表格 —— 通过（0 告警；白名单 %d 篇：%s）' %
-              (len(NUMERIC_WHITELIST), ', '.join(sorted(NUMERIC_WHITELIST))))
+        tail = ('；白名单 %d 篇：%s' % (len(NUMERIC_WHITELIST),
+                                    ', '.join(sorted(NUMERIC_WHITELIST)))) \
+               if NUMERIC_WHITELIST else '；白名单已清空，全部当前版纳入扫描'
+        print('[6] 当前版数字表格 —— 通过（0 告警%s）' % tail)
 
     # ---- 汇总 ----
     print()
