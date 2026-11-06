@@ -1,7 +1,61 @@
 # 提交记录 / 变更日志（obs-beauty）
 
-> **最新一期 = 面板 3.1.39 / 滤镜 3.1.39（2026-10-30 20:09 构建，**20:10 已装机并通过验收**）。**
-> 两轮改的都是**外观尺寸**，滤镜算法自 3.1.31 起零改动（每次只是同号重编）。
+> **最新一期 = 滤镜 3.1.40 / core 1.4.1 / 面板 3.1.40（2026-11-01 19:44 本地构建，按用户要求暂不装机）。**
+> 面板外观零改动（仅版本号 3.1.39 → 3.1.40）；本次是**算法门控**改动（见下方 3.1.40 段）。
+> 上一期已发布产物 = 面板 3.1.39 / 滤镜 3.1.39（2026-10-30 20:09 构建，20:10 已装机并通过验收）。
+>
+> **3.1.40 —— 无脸帧直接透传（修「画面里没人时还在全帧磨皮」）。**
+>
+> | 项 | 内容 |
+> |---|---|
+> | 现象 | 会话**曾经**检测到过脸、之后人走出画面，磨皮仍整幅运行，CPU 占用上升 |
+> | 根因 | `beauty_core.cpp` 的早退分支要求 `!everHadMask_`（**从没**得到过掩码）。人走开后该标志已是 true，于是落到「`haveMask=false`」分支；磨皮核把空掩码当**全皮肤**（`m = mask ? mask[i] : 255`），ROI 也放开成全帧（`x0=0,y0=0,x1=w,y1=h`） |
+> | 代价 | 1080p 磨皮段从「只磨 ROI 12.6%」的 5~7 ms 涨到全帧量级；这些像素随后**全部被丢弃**（色调/清晰/五官/细节都挂在 `haveMask` 下，美形要求 `faces_` 非空）。观感上背景与衣物被一起磨糊 |
+> | 修法 | 在 3.1.21 早退分支之后补一条判据：`faceOk_ && everHadMask_ && lastFaces_ == 0 && faceErr_ 无 "err="` → 逐字节透传，并计入新探针 `beautyCoreNoFaceFrames()` |
+> | 迟滞 | 未新增：`kMaskHold = 6` 已让「人走出去」先沿用旧掩码 6 帧，第 7 帧起才进透传；人走回时检出当帧恢复 |
+> | 回退 | `BEAUTY_NOFACE_SKIP=0` 逐字节回到 3.1.39 的全帧兜底 |
+> | 埋点 | 性能行追加 `无脸跳过 N`（窗口差值）；init 行追加 `noface_skip=on/off` |
+> | 版本 | 滤镜 3.1.39 → **3.1.40**（第三位 +1）；core 1.4.0 → **1.4.1**（单点修复，按版本号规则走最右一位；虽门控语义变了，但不构成「成组功能/重大重构」）；面板仅版本号同步 3.1.40 |
+> | 构建 | `02_构建\build_3.1.40\obs-beauty.dll` 441,856 B（3.1.39 为 440,320 B）；`build_output\obs-beauty-ui.dll` 215,040 B。装机脚本 `03_装机\install_3.1.40.bat` 已备好，**未执行** |
+>
+> **离线 A/B 实测（2026-11-01，`05_验证\_noface_ab.py`）** —— 同一进程内先跑 1 张有脸帧、
+> 再跑 40 张无脸纹理帧（从真机 1080p 帧右上角裁的 640×394 背景，实测 faces=0 best=0.033），
+> 新旧两个 core DLL 各跑一遍，逐帧比对：
+>
+> | 区段 | 帧数 | 旧 vs 新 maxdiff | 现象 |
+> |---|---|---|---|
+> | A 有脸帧 | 1 | **0** | 两边都正常磨皮（ms 15.3 / 15.4） |
+> | B 丢检保持期 | 34 | **0** | 两边都用旧掩码继续磨（含 6 个检测周期） |
+> | C 保持耗尽后 | 6 | 4 | **旧版全帧磨皮**（ms 3.7~11.5，输出被改）；**新版逐字节透传**（输出 == 输入，ms = 0.00） |
+>
+> 保持耗尽点：同步检测每 5 帧一次（`kMaskEverySync=4`），第 7 次丢检时耗尽（第 35 帧）；
+> 生产走异步检测（每帧一次），耗尽点即第 7 帧。
+>
+> ⚠️ **探针陷阱（排查耗时半小时，已写进 `_noface_ab.py` docstring）**：`core_probe` 每次
+> `BeautyCoreRun` 都调 `ensureReady()` → `warmUp()`，而 warmUp 会把 `mask_` 撑成
+> 1920×1080，于是 `updateMask` **每帧**都进「换分辨率」分支（`maskAge_=999`、
+> `maskValid_=false`、`everHadMask_=false`）—— 旧代码的全帧兜底根本复现不出来，
+> A/B 会误判「新旧行为相同」。加 `BEAUTY_NO_PREWARM=1` 跳过 warmUp 后才测到真实差异。
+> 生产路径无此问题：`obs-beauty.cpp` 只在滤镜加载时调一次 `preheat`。
+>
+> ⚠️ **装机现状**：本机当前运行的滤镜是 **GPU 版 3.1.76**（2026-11-01 19:31 装机），
+> 不是 CPU 版。GPU 版移植了同一套掩码门控，**同样的无人全帧磨皮问题在 GPU 版里同样存在**，
+> 需要时在 `D:\插件\OBS美颜GPU版` 里做同等修补。
+>
+> **2026-11-01 —— 仓库整理与 GitHub 上传准备（版本号不变，仍是 3.1.39）。**
+> 源码**逻辑零变化**（`05_验证\src_fingerprint.py` 校验：filter / ui / all 三项指纹与整理前完全一致），
+> 未产出新 DLL，故版本号不动、已发布产物的 md5 指纹继续有效。本次只动仓库组织与文档：
+>
+> | 项 | 变更 |
+> |---|---|
+> | 目录重组 | `参考分析` / `依赖与SDK` / 1105 个 `.raw` 归入新建的 `参考文件\`（01 参考分析 / 02 原始帧数据 / 03 依赖与SDK）；`09_安装包`→`06_安装包`、`10_开源参考`→`07_开源参考`（消除 06~11 断档） |
+> | 文档合并 | `00_速览_给AI.md` + `THIRD_PARTY.md` 并入根 `README.md`（新 §十六 第三方组件与来源、§十七 文档合并记录）；`美颜子功能开发指南.md` 移入 `04_文档\`。**根目录只剩 `README.md` / `LICENSE` / `.gitignore`** |
+> | 删除作废文档 | `08_历史文档\`(24) + `11_归档隔离\`(64) + `05_文档\` + `00_先读我_原版.md` + `C24_开发进度与接手说明.md` + `_删除清单_20261030.txt`，共 92 份（进回收站可恢复，备份在 `D:\插件\_归档备份\`） |
+> | **构建脚本修复** | `build_manual.bat` / `build-ui_320.bat` / GPU 版 `build_gpu.ps1` 此前用**目录名前缀**（`00_*`/`04_*`/`07_*`/`OBS*`）定位依赖，2026-10-30 改名后全部失效 ⇒ **三个脚本都无法编译**。已改为**内容探测**（按目录里必须存在的标记文件判定角色，探测 4 层）。实测：滤镜 exit=0 产 440,320 B、面板 exit=0 产 215,040 B，与定稿同体积 |
+> | **新增源码指纹工具** | `05_验证\src_fingerprint.py` —— 对 `01_源码` 规范化文本（去注释与空白、保留字符串字面量）算 SHA-256。**对注释/排版免疫、对逻辑改动敏感**（已双向实测）。解决 README §2.2 长期悬空的「md5 不可复现 ⇒ 无法判源码一致性」问题 |
+> | **新增上传自检工具** | `05_验证\check_upload.py` —— 以 git 索引为准做四道断言（索引一致性 / 法务红线 / 隐私红线 / 体积红线），避免「靠人眼扫目录」 |
+> | 上传清洗 | 上传集收敛到 **325 文件 / 847 K**。`.gitignore` 改用 `参考文件/*/` 覆盖全部子目录（原先逐个列名，新增目录会漏排除）。**闭源资产 / 参考提取物 / 真人面部位图 / 帧数据 / SDK 包装层 / 依赖闭源 SDK 的脚本全部排除**，磁盘文件一个未删（本机验证与 GPU 版编译不受影响） |
+> | 修掉的失效引用 | 26 个文件把已删的 `05_文档` 当交叉引用目标；3 处把已删的 `00_先读我.md` 当权威现状源；`06_安装包\build_setup.ps1` 兜底路径指向已删目录（不改则打包失败）；`04_文档\美颜子功能开发指南.md` §九 写「取证材料在 `rea_evidence/`」——该目录根本不存在 |
 >
 > **3.1.38 —— 控件尺寸统一 28 逻辑 px。** 真机上四种高度并排：下拉 28.6 / 标签页 31 /
 > 数值框 28.6 / 底部按钮 **51**。根因不在代码，在 OBS 主题：`Yami.obt` 给每类控件各算一套
@@ -16,10 +70,10 @@
 > 移到它原来的第二行位置。关面板走标题栏 × 或 Esc。
 >
 > **装机链**：3.1.34 = 19:15 装机；**3.1.39 = 20:10 装机（线上）**，两件 md5 与 `01_构建\build_output`
-> 逐位相同，日志 `2026-10-30 20-11-01.txt` 第 99/101/111 行报 `v3.1.39`。验收见 `05_文档\验收报告_v3.1.39.md`。
+> 逐位相同，日志 `2026-10-30 20-11-01.txt` 第 99/101/111 行报 `v3.1.39`。验收见 `04_文档\验收报告_v3.1.39.md`。
 > 3.1.35 / 3.1.36 / 3.1.37 / 3.1.38 四版均未单独装机，改动全部被 3.1.39 包含。
 > ⚠️ 本文件**不是严格倒序**：3.1.25 条目写在 3.1.26 上面（补写顺序所致）。要判断"哪个最新"请看版本号，不要看位置。
-> 现状 / 版本 / 装机位置 / 成绩一律以 `00_先读我.md` 顶部 ◆ 速览为准，本文只记"每次改了什么"。
+> 现状 / 版本 / 装机位置 / 成绩一律以根目录 `README.md` 为准，本文只记"每次改了什么"。
 
 ## 版本索引（按版本号）
 
@@ -56,7 +110,7 @@
 > 版本号不变（滤镜/面板仍 3.1.39，二进制一字未改）。这一条只记**打包链路**的改动。
 
 **产物**：`09_安装包\OBS美颜_Setup_v3.1.39.exe` · 3,634,543 B · md5 `9ec10d74cc432ba13c318c2a27dce59c`
-装 4 个文件（滤镜 + onnxruntime + models\yunet.onnx + 面板），**不再分发 NamaSDK**。
+装 4 个文件（滤镜 + onnxruntime + models\yunet.onnx + 面板），**不再分发参考实现**。
 
 | 改动 | 内容 |
 |---|---|
@@ -67,7 +121,7 @@
 | 卸载增强 | 状态键记 `ObsDir`/`UIDir`/`PDir`（路径变了也能找回来）；旧包 `SdkCreated=1` 才删 SDK；`models` 只删空目录；可询问删除 `ui.ini` |
 | 注册表 | `SetRegView 64`（原脚本读的是 Wow6432Node）、`EstimatedSize`、`QuietUninstallString` |
 
-**测试抓出两个真 BUG**（都已修，详见 `05_文档\验收报告_安装包v3.1.39.md` §五）：
+**测试抓出两个真 BUG**（都已修，详见 `04_文档\验收报告_安装包v3.1.39.md` §五）：
 
 1. 源文件自检写在 `.onInit`（运行时）→ 打包脚本清掉暂存目录后安装必 Abort（退出码 2）。
    改成编译期 `!if ! /FileExists … !error`。**第一轮测试用 `-KeepStage` 恰好掩盖了它。**
@@ -269,7 +323,7 @@ build_form: clear_form() → purge_layout(mode_grid_)   // 连按钮一起 delet
 磨皮 > 0 时 `sharpen` 不下发（`:1955`）、`global_sharpen` 非 SDK 参数（`:1950`）。
 后果：美白 100 档参照只测到 **1.264**（真值 14.019）、红润 **0.000**（真值 1.968）——
 包装层的 CPU 美白要读**我们自己的皮肤掩码**，离线路径不产掩码，于是什么都不做。
-换成 `native_native_*.json`（`sdk_native.py` 用 `NAMA_EXTRA_PARAMS_FILE` 注入）后，
+换成 `native_native_*.json`（`sdk_native.py` 用 `LEGACY_EXTRA_PARAMS_FILE` 注入）后，
 美白 Δ亮度差 **0.91 灰阶**、红润差 **0.02**、清晰差 **0.00** —— 三项都是真对齐。
 
 **硬伤 2：多帧共用进程，我方核带上一帧状态渲染。**
@@ -326,8 +380,8 @@ SDK 的 `sharpen` 是独立锐化器。语义自洽但用户可感知。
 | `06_离线验证/全项对齐_20261030/feat_matrix.py` | v0.1.0 → **v0.1.1**：多帧同进程告警；raw 落盘补帧号（原先同档三帧互相覆盖） |
 | `06_离线验证/全项对齐_20261030/_acc_vis.py` | **新增**：四联对比图（`acc_3.1.34_threed.png` / `acc_3.1.34_pouch.png`） |
 | `06_离线验证/全项对齐_20261030/acc_summary_3.1.34.json` | **新增**：干净成绩单 |
-| `05_文档/验收报告_v3.1.34.md` | **新增**：完整验收报告 |
-| `00_先读我.md` / `00_速览_给AI.md` | 构建时刻更正；下一步 ③ 改为「锐化 UX 陷阱」；黑眼圈/法令纹结论作废 |
+| `04_文档/验收报告_v3.1.34.md` | **新增**：完整验收报告 |
+| `00_先读我.md` / `00_速览_给AI.md`（均已于 2026-11-01 移除） | 构建时刻更正；下一步 ③ 改为「锐化 UX 陷阱」；黑眼圈/法令纹结论作废 |
 
 ---
 
@@ -1126,17 +1180,17 @@ corr 上界 = 位置全对 0.787 / 幅度全对 0.818，而 70 分需要 corr �
 
 - 版本：滤镜 **3.1.21 → 3.1.23**，面板 **3.1.21 → 3.1.23**
 - `verify_roi.py` 三档 **ALL PASS（maxdiff=0，ROI 与多线程两套）**
-- 新增诊断脚本 10 个，见 `00_先读我.md §0.3m⑥`
+- 新增诊断脚本 10 个（原载于已移除的 `00_先读我.md` §0.3m⑥）
 
 ---
 
 ## 滤镜 3.1.20 — 2026-10-30 · 清晰/美白/红润 改「照抄原生 SDK 曲线」（core 1.4.0）
 
 > **动机**：用户要求「面板 11 项功能都要和 SDK 对齐」。第一次把 11 项全部量化后，
-> 发现**先前的对拍参照物是错的**：`nama_golden.dll` 跑的其实是本工程自己的
-> `NamaEngine` 包装层，而这层在 2.x/3.x 用 CPU 顶替过 5 项（美白、红润、锐化、
+> 发现**先前的对拍参照物是错的**：`ref_golden.dll` 跑的其实是本工程自己的
+> `LegacyEngine` 包装层，而这层在 2.x/3.x 用 CPU 顶替过 5 项（美白、红润、锐化、
 > 清晰、全局锐化）。拿它当"SDK 真值"，测到的是**我们自己的旧代码**。
-> 改用 `NAMA_EXTRA_PARAMS_FILE`（在所有内置 setter 之后下发，可覆盖）直接
+> 改用 `LEGACY_EXTRA_PARAMS_FILE`（在所有内置 setter 之后下发，可覆盖）直接
 > 注入原生参数后，才拿到第三方产品真正跑的东西。
 
 **三项的实测性质（`06_离线验证\全项对齐_20261030\tone_curve.py`）**
@@ -1155,7 +1209,7 @@ corr 上界 = 位置全对 0.787 / 幅度全对 0.818，而 70 分需要 corr �
 | 2 | **清晰改为独立生效**：删掉 `&& (t > 0)` 前提。旧前提让「只开清晰、磨皮 0」的画面零变化（矩阵判「欠 100%」） | `beauty_core.cpp:1161` |
 | 3 | 早退与 `needMask` 同步加 `wantClarity`（否则清晰单独开仍走透传/无掩码） | `beauty_core.cpp:1170,1183` |
 | 4 | 旧实现（12px 中频回填当"清晰"、log 提亮当"美白"、加 R 压 B 当"红润"）保留在 `BEAUTY_CLARITY_LEGACY=1` 下作 A/B | `beauty_core.cpp` |
-| 5 | 版本：滤镜 3.1.19 → **3.1.20**，CoreEngine 1.3.0 → **1.4.0**，面板同号 | `nama_engine.h` / `beauty_core.cpp` / `obs-beauty-ui.cpp` |
+| 5 | 版本：滤镜 3.1.19 → **3.1.20**，CoreEngine 1.3.0 → **1.4.0**，面板同号 | `legacy_engine.h` / `beauty_core.cpp` / `obs-beauty-ui.cpp` |
 
 **对拍结果（8 帧里的 3 帧同帧、原生 SDK 参照、肤色掩码内）**
 
@@ -1189,7 +1243,7 @@ corr 上界 = 位置全对 0.787 / 幅度全对 0.818，而 70 分需要 corr �
 | 3 | 新增环境变量 `BEAUTY_SKIN_ADAPT`（默认 1）/ `BEAUTY_SKIN_RADIUS`（默认 1.0）/ `BEAUTY_SKIN_EMA`（默认 **1.0**） | `beauty_core.cpp` |
 | 4 | 新增 `beautyCoreSkinInfo()`，init OK 后打一行 `skin=adapt cb=... cr=... r=... ema=...`（真机自查自适应是否生效） | `beauty_core.{h,cpp}` / `obs-beauty.cpp` |
 | 4b | **修订**：新增 `beautyCoreSkinAnnounce()` —— worker 首次把估计中心写进全局时置 `atomic` 标志，渲染线程在 process 成功后取走并**补打一行不带 "(center=default" 的 `skin=`**。首版只在 init 打（永远是默认中心），真机 10:39 日志实锤「只有一行、没法确认第 2 帧以后估计真的成功」 | `beauty_core.{h,cpp}` / `obs-beauty.cpp` |
-| 5 | 版本：滤镜 3.1.12 → **3.1.13**，CoreEngine 0.8 → **0.9** | `nama_engine.h` / `beauty_core.cpp` |
+| 5 | 版本：滤镜 3.1.12 → **3.1.13**，CoreEngine 0.8 → **0.9** | `legacy_engine.h` / `beauty_core.cpp` |
 | 6 | **修订**：面板 3.1.11 → **3.1.13**（同号补课）。3.1.12/3.1.13 两版发的时候面板没跟着 bump，真机 10:39 日志 `模块已加载 v3.1.11` vs 滤镜 v3.1.13；界面/行为零改动，只追平号 | `obs-beauty-ui.cpp` |
 
 **实测**（真机帧 1920×1080 / 脸宽 532px，同一输入喂两引擎，差 = core − SDK）：
@@ -1243,7 +1297,7 @@ ROI / 多线程 `maxdiff=0` 全 PASS，哈希 `b7fb312e… / 4fb7a20e… / 7e0fb
 | 3 | 参数重标：`magHi` 30→**60**、`grain` 0.5→**0.10**、`protectK` 80→**40**、`boxR/boxIters` = **2/2** | `beauty_core.cpp` |
 | 4 | 新增档位饱和 `t·(1 − 0.16·t²)`：SDK 高段是饱和的，我们换低通后近乎线性，拉满会过磨 | `beauty_core.cpp` |
 | 5 | `boxPlaneH/V` 每 32 像素重算窗口和（截断 float 累积误差）；`boxRgbRoi` ROI 起点下对齐 32 | `beauty_smooth.cpp` |
-| 6 | 版本：滤镜 3.1.11 → **3.1.12**，CoreEngine 0.7.5 → **0.8** | `nama_engine.h` / `beauty_core.cpp` |
+| 6 | 版本：滤镜 3.1.11 → **3.1.12**，CoreEngine 0.7.5 → **0.8** | `legacy_engine.h` / `beauty_core.cpp` |
 
 **实测**（`region_gap.py`，磨皮 50，五区域 × 三频带相对原图保留率，越低越磨得狠）：
 
@@ -1279,9 +1333,9 @@ ROI / 多线程 `maxdiff=0` 全 PASS，哈希 `b7fb312e… / 4fb7a20e… / 7e0fb
 
 | # | 改动 | 位置 |
 |---|---|---|
-| 1 | 滤镜通过 proc handler `beauty_version` 暴露 `NAMA_BUILD_STR`（OBS 官方跨模块查询通道，纯 meta：不加载引擎、不读设置） | `obs-beauty.cpp` |
+| 1 | 滤镜通过 proc handler `beauty_version` 暴露 `LEGACY_BUILD_STR`（OBS 官方跨模块查询通道，纯 meta：不加载引擎、不读设置） | `obs-beauty.cpp` |
 | 2 | **版本同号（用户拍板）**：面板走自己的 3.0.x 线终结 —— 面板与滤镜从 3.1.11 起共用一个版本号，每次发布同步 bump；角标显示**滤镜 proc 报上来的实机版本**，两者不符时面板加括注标出（安装漏换某一边的现场证据） | `obs-beauty-ui.cpp` |
-| 3 | 面板 3.0.21 → **3.1.11**（与滤镜同号）；滤镜 3.1.10 → **3.1.11**（core 0.7.5 不动） | `obs-beauty-ui.cpp` / `nama_engine.h` |
+| 3 | 面板 3.0.21 → **3.1.11**（与滤镜同号）；滤镜 3.1.10 → **3.1.11**（core 0.7.5 不动） | `obs-beauty-ui.cpp` / `legacy_engine.h` |
 
 **签名坑（已修）**：本版 libobs（32.1.1）的 proc 回调是 `(void *data, calldata_t *params)`，
 **不是** `(obs_data_t *, obs_source_t *)` —— 第一版按 `obs_source_get_proc_handler` 文档
@@ -1330,7 +1384,7 @@ ROI / 多线程 `maxdiff=0` 全 PASS，哈希 `b7fb312e… / 4fb7a20e… / 7e0fb
 | 5 | 脖子通道羽化按**脖子自身宽度**算（`0.08 × 半宽×2`），不再吃脸宽 —— 旧值等价于脖子半宽 27%，是"效果弱"的主力 | 同上 `buildMaskInto` |
 | 6 | 诊断出口 `beautyCoreAlignUsed` / `beautyCoreAlignStat`；`BEAUTY_PROFILE=1` 的 180 帧性能日志追加「对齐 used/total（%）」 | `beauty_core.{h,cpp}` / `obs-beauty.cpp` |
 | 7 | 新开关 `BEAUTY_MASK_ALIGN=0`（关对齐，回到 3.1.9 的「当前帧+旧掩码」，A/B 用） | 同上 |
-| 8 | 版本 3.1.9 → **3.1.10**，core 0.7.4 → **0.7.5**（`NAMA_BUILD_PATCH 23`） | `nama_engine.h` / `beauty_core.cpp` |
+| 8 | 版本 3.1.9 → **3.1.10**，core 0.7.4 → **0.7.5**（`LEGACY_BUILD_PATCH 23`） | `legacy_engine.h` / `beauty_core.cpp` |
 
 **为什么不做运动预测**（再次强调）：急停/反向时框会冲过脸（过冲），比拖影更难看。
 帧对齐 + 软边比预测便宜且稳。**同步/离线路径完全没动**：`BeautyCoreRun` 走 process 但
@@ -1370,7 +1424,7 @@ ROI / 多线程 `maxdiff=0` 全 PASS，哈希 `b7fb312e… / 4fb7a20e… / 7e0fb
 
 **回退**：`BEAUTY_MASK_ALIGN=0`（回 3.1.9 行为，拖影但零延迟）；
 `BEAUTY_MASK_FEATHER=0`（逐字节回 3.1.8）；`BEAUTY_MASK_EVERY=4`（3.1.7 节奏）；
-`NAMA_ENGINE_IMPL=nama`（旧 SDK 链路）。
+`LEGACY_ENGINE_IMPL=nama`（旧 SDK 链路）。
 
 ## 滤镜 3.1.9 / CoreEngine 0.7.4 — 2026-10-28 · 修「33ms 滞后仍可见的硬边拖影」
 
@@ -1398,7 +1452,7 @@ ROI / 多线程 `maxdiff=0` 全 PASS，哈希 `b7fb312e… / 4fb7a20e… / 7e0fb
 | 2 | 羽化查表 `g_featherRamp[65][65]`，首次 `ensureReady` 时算一次 | 同上 `initFeatherRamp` |
 | 3 | 脖子通道的**底边不羽化**（下巴正下方），否则下巴出现一条水平接缝 | 同上 |
 | 4 | `BEAUTY_MASK_FEATHER`：`0` 关闭 / `>0` 固定像素 / 不设 = 自适应 12% | 同上 |
-| 5 | 版本 3.1.8 → **3.1.9**，core 0.7.3 → **0.7.4** | `nama_engine.h` / `beauty_core.cpp` |
+| 5 | 版本 3.1.8 → **3.1.9**，core 0.7.3 → **0.7.4** | `legacy_engine.h` / `beauty_core.cpp` |
 
 **为什么是 12%**：对齐开源实现 `wtnl-zhi/obs-beauty-filter` 的 `beauty.effect` ——
 它的 `mask_feather` 就是同一件事，UI 默认 **12%**、clamp 0.01~0.30。它那条边界带是
@@ -1439,7 +1493,7 @@ ROI / 多线程 `maxdiff=0` 全 PASS，哈希 `b7fb312e… / 4fb7a20e… / 7e0fb
 **指纹**：`obs-beauty.dll` 484,864 B · md5 `d1ff9801eb9c49d25c64f6ad0e38c21b` · 3.1.9 / core 0.7.4
 
 **回退**：`BEAUTY_MASK_FEATHER=0`（逐字节回到 3.1.8）；`BEAUTY_MASK_EVERY=4` 回到
-3.1.7 的提交节奏；`NAMA_ENGINE_IMPL=nama` 回到旧 SDK 链路。
+3.1.7 的提交节奏；`LEGACY_ENGINE_IMPL=nama` 回到旧 SDK 链路。
 
 **待真机验收**：摇头看硬边拖影是否变成"淡影"；CPU 应仍在 11% 上下（羽化在 worker 上
 跑，查表后每像素只剩一次乘法寻址）；观感上整体强度略降是否可接受。
@@ -1526,16 +1580,16 @@ CPU + 提交计数（`cpu_bench.cpp` §3b），并且**按真实帧率节流**�
 ## 滤镜 3.1.7 — 2026-10-28 · **默认引擎切成自研 CoreEngine**
 
 > 这一步是整条替换路线的终点：从 3.1.1 起逐项补齐面板，到 3.1.6 补掉最后一个画质缺口，
-> 现在把默认值翻过来 —— 不设任何环境变量时，跑的是自研引擎，不是 FaceUnity SDK。
+> 现在把默认值翻过来 —— 不设任何环境变量时，跑的是自研引擎，不是参考实现 SDK。
 
 | # | 改动 | 位置 |
 |---|---|---|
-| 1 | `createEngine()` 默认分支 `NamaAdapter` → `CoreEngine` | `beauty_core.cpp` |
+| 1 | `createEngine()` 默认分支 `LegacyAdapter` → `CoreEngine` | `beauty_core.cpp` |
 | 2 | 未知值（如写错成 `cor`）当作「没设置」，走默认 core | 同上 |
 | 3 | 引擎初始化失败日志补上 `engine=` 名字（原来硬写 `Nama init failed`） | `obs-beauty.cpp` |
 | 4 | **新增 WARN**：core 引擎拿不到人脸掩码时报警（见下） | `obs-beauty.cpp` |
 
-**回退**：`set NAMA_ENGINE_IMPL=nama` 就回到旧 SDK 链路，与 3.1.0 及之前逐位相同。
+**回退**：`set LEGACY_ENGINE_IMPL=nama` 就回到旧 SDK 链路，与 3.1.0 及之前逐位相同。
 
 **为什么敢切**：
 
@@ -1561,12 +1615,12 @@ Check onnxruntime.dll + models\yunet.onnx next to the plugin dll.
 ```
 PROBE_KEEP_IMPL=1 ./preheat_probe.exe
 engine        = core / 0.7.2   (env not overridden)
-  [OK  ] 默认引擎是 core（未设 NAMA_ENGINE_IMPL 时），实际拿到 'core'
+  [OK  ] 默认引擎是 core（未设 LEGACY_ENGINE_IMPL 时），实际拿到 'core'
   ...
 RESULT: PASS
 ```
 
-反向对照：`NAMA_ENGINE_IMPL=nama` 时拿到 `nama /`，preheat 因缺 `CNamaSDK.dll` 返回
+反向对照：`LEGACY_ENGINE_IMPL=nama` 时拿到 `nama /`，preheat 因缺 `参考实现.dll` 返回
 false 并给出明确错误（**不崩**）—— 说明回退开关是通的、失败路径也是软的。
 
 **指纹**：`obs-beauty.dll` 483,328 B · md5 `98ff87f22e4baff7084a5d90bc0fe4f1` · 3.1.7 / core 0.7.2
@@ -1580,7 +1634,7 @@ false 并给出明确错误（**不崩**）—— 说明回退开关是通的、
 > 是**锐化把传感器噪点放大了** —— 静态纹理帧间相关，噪点帧间独立，高通一放大，
 > 输出就逐帧跳。这是自研引擎相对 SDK 的最后一个已知画质缺口。
 
-**做法**：照 SDK 3.0.1/3.0.2 已经验证过的路子（`nama_engine.cpp` 的 `srcT` +
+**做法**：照 SDK 3.0.1/3.0.2 已经验证过的路子（`legacy_engine.cpp` 的 `srcT` +
 `detailBetaFromVel`），对**算高通用的那张亮度平面**做运动自适应 EMA：
 
 - 静止（帧间差 ≤ 2.5 灰阶）→ β=0.20，白噪声的帧间方差压到 1/3；
@@ -1713,7 +1767,7 @@ CPU 22%（20 逻辑核 ≈ 4.4 线程常忙）与 `sdk=29.4ms`/帧、720p 全帧
 | 1 | `preheat()` 真正调用 `ensureReady(err)`，`didInit` 按「这次是否真的做了加载」回填 | `beauty_core.cpp` |
 | 2 | `acquireSlot()` 加 `ensureReady` 兜底（幂等），防 preheat 路径将来再被改坏 | `beauty_core.cpp` |
 | 3 | 日志加 `engine=%s/%s`（id/版本），`region` 措辞按引擎分开：core 打 `off(无掩码/全帧)`，nama 仍打 `off(颜色启发式)` | `obs-beauty.cpp` |
-| 4 | CoreEngine `0.7 → 0.7.1`；插件 `3.1.3 → 3.1.4`（普通升级，修订位 +1） | `beauty_core.cpp` / `nama_engine.h` |
+| 4 | CoreEngine `0.7 → 0.7.1`；插件 `3.1.3 → 3.1.4`（普通升级，修订位 +1） | `beauty_core.cpp` / `legacy_engine.h` |
 
 **指纹**
 
@@ -1812,7 +1866,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 | # | 问题 | 现象 | 修法 |
 |---|---|---|---|
 | 1 | **滤镜列表出现两个同名「OBS美颜」** | 用户不知道选哪个 | `obs-beauty.cpp` 新增 `beauty_filter_name_legacy()`，旧 id 注册时显示「OBS美颜（旧场景兼容）」。功能不变 |
-| 2 | **面板认不出新 id 的滤镜** | 用新 id 加滤镜后，顶层菜单面板报「没有找到美颜滤镜实例」 | 装机中的面板 DLL 是 10-27 的旧构建，只认 `nama_beauty_filter`。源码 `isBeautyFilterId()` 早已同时认两个 id，重编到 **3.0.21** 即可 |
+| 2 | **面板认不出新 id 的滤镜** | 用新 id 加滤镜后，顶层菜单面板报「没有找到美颜滤镜实例」 | 装机中的面板 DLL 是 10-27 的旧构建，只认 `obs_beauty_filter`。源码 `isBeautyFilterId()` 早已同时认两个 id，重编到 **3.0.21** 即可 |
 
 **指纹**
 
@@ -1830,7 +1884,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 ## 安装包 3.1.2 — 2026-10-28 · 装机链路带上自研引擎运行时
 
 > 滤镜 DLL 本身**没改**（仍是 3.1.2 / `fd7ef358…`），这一节改的是「装什么、装到哪」。
-> 详见 `05_文档/C13_装机链路.md`。
+> 详见 `04_文档/C13_装机链路.md`。
 
 | # | 改动 | 实测 |
 |---|---|---|
@@ -1845,7 +1899,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## 滤镜 3.1.2 — 2026-10-28 · CoreEngine 0.7：人脸局部五项（面板 **11/11 全覆盖**）
 
-> 默认行为仍然没变（默认引擎 `NamaAdapter`）。本节全部是 `NAMA_ENGINE_IMPL=core` 那条线。
+> 默认行为仍然没变（默认引擎 `LegacyAdapter`）。本节全部是 `LEGACY_ENGINE_IMPL=core` 那条线。
 
 | # | 改动 | 实测 |
 |---|---|---|
@@ -1871,7 +1925,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## 滤镜 3.1.1 — 2026-10-28 · CoreEngine 0.6：锐化 / 全局锐化
 
-> 默认行为仍然没变（默认引擎 `NamaAdapter`）。本节全部是 `NAMA_ENGINE_IMPL=core` 那条线。
+> 默认行为仍然没变（默认引擎 `LegacyAdapter`）。本节全部是 `LEGACY_ENGINE_IMPL=core` 那条线。
 
 | # | 改动 | 实测 |
 |---|---|---|
@@ -1886,8 +1940,8 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## 滤镜 3.1.0 — 2026-10-28 · 自研引擎（CoreEngine 0.5）落地 8 项
 
-> **默认行为没变**：默认引擎仍是 `NamaAdapter`（走 CNamaSDK）。下面全部是
-> `NAMA_ENGINE_IMPL=core` 那条自研路线。默认路径的输出哈希与 3.0.19 逐字节一致
+> **默认行为没变**：默认引擎仍是 `LegacyAdapter`（走 参考实现）。下面全部是
+> `LEGACY_ENGINE_IMPL=core` 那条自研路线。默认路径的输出哈希与 3.0.19 逐字节一致
 > （`3f41f430…` / `40946fc9…` / `fda807e2…`，三档分辨率）。
 
 | # | 改动 | 实测 |
@@ -1900,10 +1954,10 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 | C6 | 美白（对数保色相）+ 红润（补压绿） | 色相偏移 0.26°，非皮肤 0 字节 |
 | C9 | **clarity（清晰）**：25px 大半径局部对比 | 中频 98.6 → 104.7，+1.4 ms，面板「清晰」首次生效 |
 | C10 | **检测异步**：worker 线程 + 单槽位交接 | 最慢帧 22.90 → 18.65 ms；超 60fps 预算帧 5/24 → 1/24 |
-| 改名 | 源码/DLL/数据目录去掉第三方名（`obs-nama-beauty` → `obs-beauty`）；source id 新旧双注册 | 老场景不丢滤镜 |
+| 改名 | 源码/DLL/数据目录去掉第三方名（`obs-beauty` → `obs-beauty`）；source id 新旧双注册 | 老场景不丢滤镜 |
 | 许可 | 边界从「全自研」改为「开源可商用」；装机包 73.7 MB → 约 15.7 MB | YuNet 232 KB（MIT）+ ORT 11.6 MB（MIT） |
 
-**做了但默认关的**（有实测数据，见 `05_文档/C7`、`C8`）：
+**做了但默认关的**（有实测数据，见 `04_文档/C7`、`C8`）：
 引导滤波（1080p 31.9 ms 超预算）、浮点+低频参照（四项指标两项更差）。
 
 **还没做**：锐化、全局锐化、五官立体、亮眼、去黑眼圈、去法令纹、祛斑痘
@@ -1911,7 +1965,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 归档日期 2026-10-26 · 滤镜当前 **v3.1.0**（2026-10-28 升级） · UI 模块 **v3.0.20**（2026-10-27 更新）
 
-> **读之前先知道一件事**：本文是**历史流水**，里面提到的脚本名（`install_nama_319.bat`、
+> **读之前先知道一件事**：本文是**历史流水**，里面提到的脚本名（`install_319.bat`、
 > `rollback_ui_318.bat` 等）与旧版二进制，已在 2026-10-27 的清理中删除。
 > 现在还存在的只有 `01_构建\build_manual.bat`、`01_构建\build-ui_320.bat`、
 > `02_装机\install_ui_320.bat`、`02_装机\OBS美颜插件卸载.bat`，
@@ -1924,7 +1978,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 > | commit | 说明 |
 > |---|---|
 > | `7536365` | OBS美颜个人用（学习版）：初始源码存档（仅源码/脚本/文档，不含商业 SDK 二进制） |
-> | `531f515` | 新增 CNamaSDK 导入库本地重建方案（`gen-importlib.bat/py`） |
+> | `531f515` | 新增参考实现导入库本地重建方案（`gen-importlib.bat/py`） |
 > | `eb3e612` | README 新增使用方式（快速开始）章节 |
 >
 > 所以下表 3.0.11 之后的内容来自本次协作过程中的实际改动记录（可信）；
@@ -1935,7 +1989,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## UI 3.0.20 — 2026-10-27 · 界面减负（去括注 / 删三个按钮 / 宽度 780 → 460）
 
-**只改了 `obs-nama-beauty-ui.dll`。滤镜 DLL 与 OBS 原生「滤镜属性」窗口完全没动。**
+**只改了 `obs-beauty-ui.dll`。滤镜 DLL 与 OBS 原生「滤镜属性」窗口完全没动。**
 
 ### 用户提的三条
 
@@ -1975,7 +2029,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 | 项 | 值 |
 |---|---|
-| DLL | `obs-nama-beauty-ui.dll` · 201,728 B · md5 `4114de2e649f0527afe0c4b1e72d7ace` |
+| DLL | `obs-beauty-ui.dll` · 201,728 B · md5 `4114de2e649f0527afe0c4b1e72d7ace` |
 | 构建脚本 | `01_构建\build-ui_320.bat` |
 | 装机脚本 | `02_装机\install_ui_320.bat` |
 | 回滚脚本 | `02_装机\rollback_ui_319.bat`（回到 3.0.19，预期 md5 `c0b18eee304b230aaff958ddd88f10d2`） |
@@ -1987,7 +2041,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 | NSIS 安装包 | `D:\插件\OBS美颜_Setup_v3.0.20.exe` · 59.5 MB | 给普通用户：双击下一步，写控制面板卸载项，自带卸载器 |
 | 整合包 zip | `D:\插件\OBS美颜_v3.0.20_整合包.zip` · 64 MB | 绿色使用：不写注册表，走 `INSTALL.bat` / `ROLLBACK.bat` |
 
-安装包脚本在 `08_安装包\obs-nama-beauty.nsi`（UTF-8 BOM + `Unicode true`，`makensis` 编译零警告）。
+安装包脚本在 `08_安装包\obs-beauty.nsi`（UTF-8 BOM + `Unicode true`，`makensis` 编译零警告）。
 **卸载的三条硬规则**（写进脚本，不是口头承诺）：
 
 1. 装之前若已有同名 DLL → 先备份到 `$INSTDIR\backup`，卸载时还原，而不是"删掉就算"；
@@ -2004,7 +2058,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## UI 3.0.19 — 2026-10-27 · 参数面板加常显版本号（仅 UI 模块，滤镜不动）
 
-**只改了 `obs-nama-beauty-ui.dll`。`obs-nama-beauty.dll`（滤镜）与 OBS 原生「滤镜属性」
+**只改了 `obs-beauty-ui.dll`。`obs-beauty.dll`（滤镜）与 OBS 原生「滤镜属性」
 窗口完全没动。**
 
 ### 需求
@@ -2035,16 +2089,16 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 | 项 | 值 |
 |---|---|
-| DLL | `obs-nama-beauty-ui.dll` · 203,776 B · md5 `c0b18eee304b230aaff958ddd88f10d2` |
+| DLL | `obs-beauty-ui.dll` · 203,776 B · md5 `c0b18eee304b230aaff958ddd88f10d2` |
 | 构建脚本 | `01_构建\build-ui_319.bat`（版本号在源码里，未用命令行 `/D` 传，避免两处版本源） |
 | 装机脚本 | `02_装机\install_ui_319.bat`（自提权，装完 `certutil` 自校验 md5） |
 | 回滚脚本 | `02_装机\rollback_ui_318.bat`（回到 3.0.18，预期 md5 `38638ab34de37680caba3da42c6264c0`） |
-| 装机状态 | 已装机到 `C:\ProgramData\obs-studio\plugins\obs-nama-beauty-ui\bin\64bit\`，装机后 md5 与构建产物一致 |
+| 装机状态 | 已装机到 `C:\ProgramData\obs-studio\plugins\obs-beauty-ui\bin\64bit\`，装机后 md5 与构建产物一致 |
 
 ### 未做的事（明确边界）
 
 - **没有显示滤镜 DLL 的版本号。** UI 模块在编译期无法知道运行时加载的是哪个滤镜版本；
-  若把 `3.0.19` 硬编码成"滤镜版本"显示，一旦 `rollback_nama_319.bat` 把滤镜退回 3.0.18，
+  若把 `3.0.19` 硬编码成"滤镜版本"显示，一旦 `rollback_319.bat` 把滤镜退回 3.0.18，
   面板就会显示错的滤镜版本。要让面板显示真实滤镜版本，需要滤镜侧暴露只读属性或版本串，
   改动两个模块 —— 本次不做，留作可选后续。
 - **没有做运行时自动化 UI 自测。** `NAMA_UI_AUTOTEST_BUILD` 的自动化分支需要单独编译测试版，
@@ -2054,7 +2108,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## UI 3.0.18 — 2026-10-26 · 参数面板排版重做（仅 UI 模块，滤镜不动）
 
-**只改了 `obs-nama-beauty-ui.dll`。`obs-nama-beauty.dll`（滤镜）和 OBS 原生
+**只改了 `obs-beauty-ui.dll`。`obs-beauty.dll`（滤镜）和 OBS 原生
 「滤镜属性」窗口完全没动，属性表一个字没改。**
 
 ### 问题
@@ -2094,14 +2148,14 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 **第三个参数必须是 `obs_obj_get_data(filter_)`，不是 `filter_` 本身。**
 
-滤镜那三个回调第一句都是 `struct nama_filter *f = (struct nama_filter *)data;`，
+滤镜那三个回调第一句都是 `struct beauty_filter *f = (struct beauty_filter *)data;`，
 然后拿 `f->context` 当 `obs_source_t*` 用 —— 也就是说回调期望收到的是**滤镜的
 私有数据指针**。但 OBS 自己传的不是这个：
 
 - `shared/properties-view/properties-view.cpp` 的 ButtonClicked 分支用的是
   `view->GetObject().Get()`，即 `obs_source_t*`；
 - `struct obs_source` 的首成员是 `obs_context_data`（首字段 `char *name`），
-  跟 `struct nama_filter` 的 `context` 不是同一个东西。
+  跟 `struct beauty_filter` 的 `context` 不是同一个东西。
 
 所以原生「滤镜属性」页点这三个按钮时，`f->context` 实际读到的是 `name` 指针
 → `obs_source_valid()` 判假 → `obs_source_update()` 直接返回。后果是
@@ -2122,12 +2176,12 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 - `01_构建\build-ui_318.bat`（新增；纯 ASCII + 通配符定位中文目录，
   原因同 `build_manual.bat` 的 GBK/C1083 问题）
-- `01_构建\build_output\obs-nama-beauty-ui_318.dll`　202,240 B
+- `01_构建\build_output\obs-beauty-ui_318.dll`　202,240 B
   md5 `38638ab34de37680caba3da42c6264c0`
-- `02_装机\obs-nama-beauty-ui_3.0.18.dll`（归档，同 md5）
+- `02_装机\obs-beauty-ui_3.0.18.dll`（归档，同 md5）
 - `02_装机\install_ui_318.bat`（新增，自提权）
-- 装机位置 `C:\ProgramData\obs-studio\plugins\obs-nama-beauty-ui\bin\64bit\`
-- 备份 `ui-backup\obs-nama-beauty-ui.dll.20261026_140742.bak`（3.0.17）
+- 装机位置 `C:\ProgramData\obs-studio\plugins\obs-beauty-ui\bin\64bit\`
+- 备份 `ui-backup\obs-beauty-ui.dll.20261026_140742.bak`（3.0.17）
 
 ### 踩坑
 
@@ -2140,7 +2194,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## v3.0.19 — 2026-10-26 · 磨皮「结构区细频回填」打开，边缘对比 +25.8%
 
-**背景**：3.0.18 之后又做了 6 轮 A/B 截图对比（我们 vs OBS 美颜摄像头 2.4.2）。
+**背景**：3.0.18 之后又做了 6 轮 A/B 截图对比（我们 vs 参考产品 2.4.2）。
 把锐化从 0 一路推到 80，全参数对齐（磨皮 80 / 美白 30 / 锐化 80）后，
 边缘对比仍比对方低 **25.89%**，且**双方都到平台**（对方锐化 60→80 边缘只再涨
 2.4%）—— 说明滑块这条路已走到底，瓶颈在代码里。
@@ -2179,11 +2233,11 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 | 文件 | 改动 |
 |---|---|
-| `nama_engine.h` | `NAMA_BUILD_PATCH` 18→19、`NAMA_BUILD_STR` → `"3.0.19"` |
-| `nama_engine.cpp` | `kTexModes[0]` 人像 `{284,0,0}` → `{284,0,400}` |
-| `nama_engine.cpp` | `kTexModes[1]` 清晰 `{256,256,300}` → `{256,256,500}` |
-| `nama_engine.cpp` | `kTexModes[2]` 精细 `{200,200,180}` → `{200,200,300}` |
-| `nama_engine.cpp` | `kTexModes[3]` 朦胧 `{140,0,0}` 不动 |
+| `legacy_engine.h` | `LEGACY_BUILD_PATCH` 18→19、`LEGACY_BUILD_STR` → `"3.0.19"` |
+| `legacy_engine.cpp` | `kTexModes[0]` 人像 `{284,0,0}` → `{284,0,400}` |
+| `legacy_engine.cpp` | `kTexModes[1]` 清晰 `{256,256,300}` → `{256,256,500}` |
+| `legacy_engine.cpp` | `kTexModes[2]` 精细 `{200,200,180}` → `{200,200,300}` |
+| `legacy_engine.cpp` | `kTexModes[3]` 朦胧 `{140,0,0}` 不动 |
 | `01_构建\build_manual.bat` | 改为通配符定位目录（原文件是 UTF-8，cmd 按 GBK 读中文路径会 C1083） |
 
 **有效增益**（t=256 结构处）= `base/256 × (1 + edge/256)`：
@@ -2214,7 +2268,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 +1.42%；清晰 边缘 +10.29% / 平坦 +0.99% / 过冲 +12.59%；精细 边缘 +5.21% /
 平坦 +0.32% / 过冲 +7.38%；朦胧**逐位不变**（细节 +0.0000%）。
 
-**一致性核对**：从测试副本编出的 `nama_engine_test_319.dll` 与方案 B 候选逐项
+**一致性核对**：从测试副本编出的 `legacy_engine_test_319.dll` 与方案 B 候选逐项
 对账 —— 人像 边缘 +0.002%、精细 −0.002%、朦胧 +0.0000%，三次独立重跑完全一致。
 （脚本内换运行顺序时边缘指标会抖 ±0.18%，已确认是测量顺序噪声，不是构建差异。）
 
@@ -2237,9 +2291,9 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 |---|---|
 | 滤镜 DLL | `304640 B` / md5 `1ae34e35f8063d273856e7a929eeb70b` |
 | 二进制版本串 | `3.0.19` ×2、`3.0.18` ×0 |
-| 安装器 | `02_装机\install_nama_319.bat`（自提权，只换滤镜模块，UI 未动） |
-| 回滚 | `02_装机\rollback_nama_319.bat`（一键回 3.0.18） |
-| 旧版备份 | `obs-nama-beauty-backup\obs-nama-beauty.dll.20261026_124030.bak` |
+| 安装器 | `02_装机\install_319.bat`（自提权，只换滤镜模块，UI 未动） |
+| 回滚 | `02_装机\rollback_319.bat`（一键回 3.0.18） |
+| 旧版备份 | `obs-beauty-backup\obs-beauty.dll.20261026_124030.bak` |
 | 装机日志 | `src 304640 bytes md5 1ae34e35…` / `dst 304640 bytes md5 1ae34e35…` / `ok` |
 | 独立复核 | `certutil` md5 一致；`NamaVersion()` 返回 `0x30000`（3.0，ABI 未变） |
 
@@ -2247,7 +2301,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 ## v3.0.18 — 2026-10-26 · 美白重标定 + 磨皮细频回填 +10.9%
 
-**背景**：A/B 横评（自制 3.0.17 vs OBS 美颜摄像头 2.4.2，同为磨皮 50 / 美白 30）
+**背景**：A/B 横评（自制 3.0.17 vs 参考产品 2.4.2，同为磨皮 50 / 美白 30）
 发现两项扣分，根因是同一个：**脸被提亮得太多，把相对纹理对比稀释掉了**。
 
 | 指标（已扣曝光差） | 3.0.17 | 第三方 2.4.2 | 差 |
@@ -2258,9 +2312,9 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 | 文件 | 改动 |
 |---|---|
-| `nama_engine.h` | `NAMA_BUILD_PATCH` 17→18、`NAMA_BUILD_STR` → `"3.0.18"` |
-| `nama_engine.cpp` | 美白 `kMax` **0.32 → 0.16**（`applyRegionEffects`）。美白不下发 SDK，全走 CPU 钟形曲线 `Δ = 面板/100 × kMax × v(255−v)/255`；按第三方锚点（55 档 +5.66、满档约 +10）反解得 0.1615，取 0.16 |
-| `nama_engine.cpp` | `kTexModes[0]`（人像磨皮）`base` **256 → 284**（细频带 +10.9%）。不动 `edge` 权重，避免镜框白边发脆 |
+| `legacy_engine.h` | `LEGACY_BUILD_PATCH` 17→18、`LEGACY_BUILD_STR` → `"3.0.18"` |
+| `legacy_engine.cpp` | 美白 `kMax` **0.32 → 0.16**（`applyRegionEffects`）。美白不下发 SDK，全走 CPU 钟形曲线 `Δ = 面板/100 × kMax × v(255−v)/255`；按第三方锚点（55 档 +5.66、满档约 +10）反解得 0.1615，取 0.16 |
+| `legacy_engine.cpp` | `kTexModes[0]`（人像磨皮）`base` **256 → 284**（细频带 +10.9%）。不动 `edge` 权重，避免镜框白边发脆 |
 
 **实测（3.0.18 测试 DLL，同序列 ±5 噪声 10 帧，1074×604，脸内 88770 px）**：
 
@@ -2287,9 +2341,9 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 锐化这条杆的权重实测（模式 0）：锐化 0→50 让总细节 **+62.27%**、平坦高频
 +37.80%、闪动仅 +9.24%。所以「质感」主要靠锐化，`base` 只是把它放大 10.9%。
 
-**装机**：滤镜 `obs-nama-beauty.dll` 304640 B / md5 `fc99c8123fd4f365c7a77acea0ba9f80`
+**装机**：滤镜 `obs-beauty.dll` 304640 B / md5 `fc99c8123fd4f365c7a77acea0ba9f80`
 → `C:\Program Files\obs-studio\obs-plugins\64bit\`（UI 模块未改动，沿用 3.0.17）。
-回档：`02_装机\rollback_nama_318.bat`。
+回档：`02_装机\rollback_318.bat`。
 
 ---
 
@@ -2301,10 +2355,10 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
 
 | 文件 | 改动 |
 |---|---|
-| `nama_engine.h` | `NamaSettings` 新增 `int smooth_mode`（默认 0）；`NAMA_BUILD_PATCH` 16→17、`NAMA_BUILD_STR` → `"3.0.17"` |
-| `nama_engine.cpp` | 新增 `kTexLo`/`kTexHi`（0.75 / 4.0 级，按实测分布定）、`NamaTexMode kTexModes[4]`；`applySharpen()` 增加 `int smoothMode` 参数，在写回前按 `\|h_mid\|` 调制脸内细频增益；调用处传 `s.smooth_mode` |
-| `nama_engine.cpp` | 新增 `texModeNeedsBaseline`：清晰/精细模式在「锐化」「清晰」都为 0 时按「锐化 50」做基准回填，否则只开磨皮时下拉框静默失效 |
-| `obs-nama-beauty.cpp` | 结构体加 `smooth_mode`；`nama_filter_settings/read` 同步；默认值 `smooth_mode=0`；新增「磨皮模式」下拉框（4 项）+ 长说明 |
+| `legacy_engine.h` | `LegacySettings` 新增 `int smooth_mode`（默认 0）；`LEGACY_BUILD_PATCH` 16→17、`LEGACY_BUILD_STR` → `"3.0.17"` |
+| `legacy_engine.cpp` | 新增 `kTexLo`/`kTexHi`（0.75 / 4.0 级，按实测分布定）、`LegacyTexMode kTexModes[4]`；`applySharpen()` 增加 `int smoothMode` 参数，在写回前按 `\|h_mid\|` 调制脸内细频增益；调用处传 `s.smooth_mode` |
+| `legacy_engine.cpp` | 新增 `texModeNeedsBaseline`：清晰/精细模式在「锐化」「清晰」都为 0 时按「锐化 50」做基准回填，否则只开磨皮时下拉框静默失效 |
+| `obs-beauty.cpp` | 结构体加 `smooth_mode`；`beauty_filter_settings/read` 同步；默认值 `smooth_mode=0`；新增「磨皮模式」下拉框（4 项）+ 长说明 |
 
 **实测**（磨皮50/锐化50，10 帧，1074×604，脸内 88811 px）：
 
@@ -2324,7 +2378,7 @@ cd _probe_run && set BEAUTY_FACE_MODEL=<...>\models\yunet.onnx && preheat_probe.
   - 抗噪：同一素材加均匀噪声 ±15，收益反而更强（平坦 **−25.0%**、闪动 **−11.5%**）；
     ±30 才失效（平坦 +13.9%，此时脸内 1~2px 本底已到 12.5 级）。
   - 换素材（640×394，另一人/另一光线）出现"符号相反"（平坦 +11.0%）；逐帧核对后
-    查明是 **fuai 的肤色掩码在该画面上错位并漂移**（窄竖条压在右半脸，第 10 帧飘到
+    查明是 **参考实现-AI 的肤色掩码在该画面上错位并漂移**（窄竖条压在右半脸，第 10 帧飘到
     左侧），`mv≈0` → `am≈0` → 四档全部打空（只改动 19% 的脸内像素）。**结论是上游
     分割问题，不是本算法问题，但影响"只磨皮肤"这个设定本身。**
   - 过程里修掉一个夹具 bug：掩码转储按文件名取最后一个，会拿到上一次 60 帧运行的
@@ -2339,19 +2393,19 @@ UI 未变（`07f9d9b03eee200dc223d9e5282cafa6`，面板动态生成，新档位�
 ## v3.0.16 — 2026-10-26 · 突破升级：接上 SDK 侧 clarity + 新增祛斑痘
 
 **背景**：目标是把磨皮/纹理做到第三方「美颜 2.4.2」的 90~95%。
-排查后确认双方用的是**同一套 SDK**（`fuai.dll` / `CNamaSDK.dll` / `face_beautification.bundle`
+排查后确认双方用的是**同一套 SDK**（`参考实现-AI.dll` / `参考实现.dll` / `美颜道具 bundle`
 md5 全部相同），差距在三处参数没接上。
 
 | 文件 | 改动 |
 |---|---|
-| `nama_engine.h` | 新增枚举 `P_DELSPOT`（索引 10）；`P_COUNT` 10 → 11；`NAMA_BUILD_PATCH` 15→16、`NAMA_BUILD_STR` → `"3.0.16"`；默认值数组补一位 |
-| `nama_engine.cpp:1766` | 参数 key 表追加 `"delspot_level"`；`sdkMax` 补 `1.0` |
-| `nama_engine.cpp` | **删除 `if (i == P_CLARITY) continue;`** —— clarity 从 3.0.2 起只做 CPU 中频增益、从不下发 SDK，现在恢复下发 |
-| `obs-nama-beauty.cpp:97` | 滑块表追加 `{"delspot_level", "祛斑痘", 0.0, 1.0}` |
+| `legacy_engine.h` | 新增枚举 `P_DELSPOT`（索引 10）；`P_COUNT` 10 → 11；`LEGACY_BUILD_PATCH` 15→16、`LEGACY_BUILD_STR` → `"3.0.16"`；默认值数组补一位 |
+| `legacy_engine.cpp:1766` | 参数 key 表追加 `"delspot_level"`；`sdkMax` 补 `1.0` |
+| `legacy_engine.cpp` | **删除 `if (i == P_CLARITY) continue;`** —— clarity 从 3.0.2 起只做 CPU 中频增益、从不下发 SDK，现在恢复下发 |
+| `obs-beauty.cpp:97` | 滑块表追加 `{"delspot_level", "祛斑痘", 0.0, 1.0}` |
 
 ### 为什么这么改（离线 sweep 实测依据）
 
-用 `NAMA_EXTRA_PARAMS_FILE` 诊断通道在测试 DLL 上扫参数，结论：
+用 `LEGACY_EXTRA_PARAMS_FILE` 诊断通道在测试 DLL 上扫参数，结论：
 
 | 尝试 | 结果 |
 |---|---|
@@ -2383,47 +2437,47 @@ md5 全部相同），差距在三处参数没接上。
 
 | 文件 | 大小 | md5 |
 |---|---|---|
-| `obs-nama-beauty_3.0.16.dll`（滤镜） | 304128 | `508b4156315804f751e86097fe98f274` |
-| `obs-nama-beauty-ui_3.0.16.dll`（菜单/面板） | 193536 | `07f9d9b03eee200dc223d9e5282cafa6` |
+| `obs-beauty_3.0.16.dll`（滤镜） | 304128 | `508b4156315804f751e86097fe98f274` |
+| `obs-beauty-ui_3.0.16.dll`（菜单/面板） | 193536 | `07f9d9b03eee200dc223d9e5282cafa6` |
 
 UI 模块与 3.0.15 **完全相同**（md5 一致）—— 面板由 `build_form()` 按滤镜属性动态生成，
 新增滑块不需要重编 UI。
 
-> 补充：装机前对 `obs-nama-beauty.cpp` 的帮助文案做过一轮修正（`clarity` 的说明还停留在
+> 补充：装机前对 `obs-beauty.cpp` 的帮助文案做过一轮修正（`clarity` 的说明还停留在
 > 3.0.2「已弃用」的旧描述，会误导用户；同时补上 `delspot_level` 的说明）。
-> 该改动**只影响字符串常量**，`nama_engine.cpp/.h` 未动，像素路径不变。
+> 该改动**只影响字符串常量**，`legacy_engine.cpp/.h` 未动，像素路径不变。
 > 上表 md5 是修正后的最终值（304128 B）。
 
-- **状态：已编译并离线验证，装机待人工双击 `install_nama_316.bat` 过 UAC。**
-- 全量归档到 `D:\插件\NamaBeauty_v3.0.16_FINAL\`；原目录 `D:\插件\obs-beauty-filter\` 与 `C:\nama_e2e\` 未动。
+- **状态：已编译并离线验证，装机待人工双击 `install_316.bat` 过 UAC。**
+- 全量归档到 `D:\插件\Beauty_v3.0.16_FINAL\`；原目录 `D:\插件\obs-beauty-filter\` 与 `C:\beauty_e2e\` 未动。
 
 ## v3.0.15 — 2026-10-26 · 插件改名为「OBS美颜」
 
 | 文件 | 改动 |
 |---|---|
-| `obs-nama-beauty.cpp` | `nama_filter_name()` 返回值 `"NamaSDK Beauty"` → `"OBS美颜"` |
-| `obs-nama-beauty.cpp` | `obs_module_description()` 模块描述同步 |
-| `obs-nama-beauty-ui.cpp` | 面板窗口标题「美颜参数面板」→「OBS美颜参数面板」 |
-| `obs-nama-beauty-ui.cpp` | 无滤镜实例时的提示文案、关于对话框文案替换 |
-| `nama_engine.h` | `NAMA_BUILD_PATCH` 14→15，`NAMA_BUILD_STR` → `"3.0.15"` |
+| `obs-beauty.cpp` | `beauty_filter_name()` 返回值 `"参考实现 Beauty"` → `"OBS美颜"` |
+| `obs-beauty.cpp` | `obs_module_description()` 模块描述同步 |
+| `obs-beauty-ui.cpp` | 面板窗口标题「美颜参数面板」→「OBS美颜参数面板」 |
+| `obs-beauty-ui.cpp` | 无滤镜实例时的提示文案、关于对话框文案替换 |
+| `legacy_engine.h` | `LEGACY_BUILD_PATCH` 14→15，`LEGACY_BUILD_STR` → `"3.0.15"` |
 | `attach_beauty.py` | `FILTER_NAME` 常量同步（含 docstring） |
 | `blur_test\*.py`（7 个） | `FILTER` / `"name"` 常量同步，否则自动化脚本找不到滤镜 |
 | `beauty_panel\index.html`、`使用说明.md` | 提示文案同步 |
 | `README.md`、`一级入口说明.md` | 文档同步 |
 
-- **source id 仍是 `nama_beauty_filter`**，已挂在场景里的滤镜不受影响（OBS 按 id 查找滤镜，不按显示名）。
+- **source id 仍是 `obs_beauty_filter`**，已挂在场景里的滤镜不受影响（OBS 按 id 查找滤镜，不按显示名）。
 - `src\_backup_before_v2\` 下的旧源码**有意保留未替换**（历史快照）。
 - 产物：滤镜 md5 `72d72a1f79c6e81d2d5801813448e4c7`；UI md5 `07f9d9b03eee200dc223d9e5282cafa6`。
 - 同时完成全量归档到 `D:\插件\NamaBeauty_v3.0.15_FINAL\`（3.4 GB / 7427 文件），原目录未动。
-- **状态：已编译，装机待人工双击 `install_nama_315.bat` 过 UAC。**
+- **状态：已编译，装机待人工双击 `install_315.bat` 过 UAC。**
 
 ## v3.0.14 — 2026-10-26 · 磨皮时间平滑关闭，退回 3.0.8 观感
 
 | 文件 | 改动 |
 |---|---|
-| `nama_engine.cpp:916` | `kBlendBetaStill` **0.25 → 1.0**（srcT 恒等于当前原图） |
-| `nama_engine.h` | 13→14 |
-| `obs-nama-beauty.cpp` | 磨皮滑块说明补充 3.0.14 改动 |
+| `legacy_engine.cpp:916` | `kBlendBetaStill` **0.25 → 1.0**（srcT 恒等于当前原图） |
+| `legacy_engine.h` | 13→14 |
+| `obs-beauty.cpp` | 磨皮滑块说明补充 3.0.14 改动 |
 
 - 只动磨皮混合的 srcT；`kDetailBetaStill=0.20`、中频 `kMidBetaStill=0.08`、`kDetailVelStill=0.15`、`kDetailVelFull=0.40` **均未改**。
 - 实测（磨皮 50 / 60 帧 / 脸内 88811 px）：细节 3.342 → **3.503**（+4.8%），闪动 0.590 → **1.509**（×2.56），
@@ -2435,11 +2489,11 @@ UI 模块与 3.0.15 **完全相同**（md5 一致）—— 面板由 `build_form
 
 - 新增 `P_GLOBAL_SHARPEN` / 「全局锐化」滑块；锐化只作用于掩码内，掩码外按权重衰减。
 - **全局锐化 = 0 时背景逐字节不变**（`check_bg.py` 可验证）。
-- `obs-nama-beauty.cpp` 把「枚举 ↔ 参数表一一对应」从注释升级为编译期约束（历史上 `P_WHITEN=2` 静默错位过）。
+- `obs-beauty.cpp` 把「枚举 ↔ 参数表一一对应」从注释升级为编译期约束（历史上 `P_WHITEN=2` 静默错位过）。
 
 ## v3.0.12 — 2026-10-25 · 帧级容错
 
-- `nama_region`：删掉 warmup，新增 `noteFail()` + `failStreak_` + `kMaxFailStreak=12`；
+- `beauty_region`：删掉 warmup，新增 `noteFail()` + `failStreak_` + `kMaxFailStreak=12`；
   推理失败时沿用上一帧掩码，最多 `kMaskHoldFrames=6` 帧。
 - **这是稳定性上的关键修复**：3.0.11 及更早是 `failed_=true` **永久熔断**，一次失败整进程再也不美颜。
 - 受控压测：3.0.13 丢帧 0.75% vs 3.0.11 3.31%（Fisher 精确检验 p≈9e-13）；
@@ -2458,7 +2512,7 @@ UI 模块与 3.0.15 **完全相同**（md5 一致）—— 面板由 `build_form
 
 - 磨皮对齐第三方「人像磨皮」：源码标注「50 档纹理保留约 **86%**，旧版为 72%」。
 - **这是后续所有版本对标 3.0.8 的原因**；3.0.14 的 β=1.0 就是精确回到这一版的行为。
-- 备份 md5 `4318534d`（`obs-nama-beauty.dll.20261025_164923.bak`，298496 B）。
+- 备份 md5 `4318534d`（`obs-beauty.dll.20261025_164923.bak`，298496 B）。
 
 ## v3.0.7 及更早
 
@@ -2468,7 +2522,7 @@ UI 模块与 3.0.15 **完全相同**（md5 一致）—— 面板由 `build_form
 
 - 只有装机脚本（`gen_install_304.py` … `gen_install_310.py`）与评测脚本
   （`analyze_301.py`、`analyze_302.py`、`analyze_304.py`）留存，**无文字变更说明**。
-- 需要复原改动内容时，比对 `07_历史版本\` 里对应 DLL 的反编译结果，或查上述脚本内的注释。
+- 需要复原改动内容时，比对 `07_历史版本\` 里对应 DLL 的静态分析结果，或查上述脚本内的注释。
 
 ---
 

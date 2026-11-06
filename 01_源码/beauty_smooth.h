@@ -7,14 +7,14 @@
 // (Apache-2.0) 本身合规。手写的真实理由是体积 —— 即使只裁 core+imgproc，
 // 也要把十几 MB 的 DLL 重新塞回安装包，而我们要的只有双边滤波这一个函数。
 //
-// 参数是怎么定的：见 05_文档/S2_磨皮核对拍结论.md。离线对拍结论是
+// 参数是怎么定的：见 04_文档/S2_磨皮核对拍结论.md。离线对拍结论是
 // cv2.bilateralFilter(d=9, sigmaColor=40) 能复现 参考实现的档位曲线（RMSE 1.16 个
 // 百分点），所以默认参数按它的口径换算：
 //     d = 9             -> radius = 4（(9-1)/2）
 //     sigmaSpace = 13.5 （OpenCV 内部取 d*1.5）
 //     sigmaColor = 40   -> 三通道 L1 颜色距离的高斯 sigma
 //
-// 性能策略（按收益排序，见 05_文档/C1_CPU性能优化.md）：
+// 性能策略（按收益排序，见 04_文档/C1_CPU性能优化.md）：
 //   1) ROI 裁剪 —— 磨皮只作用于掩码区（约 7% 画面），全帧跑等于浪费 90% 算力。
 //      逐像素独立计算，裁剪不改变结果，画质零损失。
 //   2) 多线程按行切分 —— 行与行之间没有数据依赖，天然可并行。
@@ -73,7 +73,7 @@ void bilateralRgbaDown(const unsigned char* src, unsigned char* dst,
 void mixRgba(const unsigned char* src, const unsigned char* smooth,
              unsigned char* dst, int w, int h, float t);
 
-// 默认参数：离线对拍扫出来的最优组合（05_文档/S2_磨皮核对拍结论.md）
+// 默认参数：离线对拍扫出来的最优组合（04_文档/S2_磨皮核对拍结论.md）
 //   radius=2 / σSpace=7 / σColor=40 → 档位曲线误差 1.09 个百分点
 // 注意半径小反而更贴合 参考实现：说明它的平滑核半径本来就不大。
 enum { kSmoothRadius = 2 };
@@ -145,7 +145,7 @@ LowFreqBuf lowFreqRefRoi(const unsigned char* src, int w, int h,
 //   2) 细频带带一个软阈值 thrFine：相机噪点与毛孔在幅值上重叠（±2~6 vs 2~8），
 //      幅值分不开，只能靠软阈值削掉最细的一小段，避免 3.0.0 那版「脸部屏闪」。
 //   3) 没有做时序 EMA（core 引擎目前无跨帧状态），所以噪点抑制不如参考实现版彻底。
-//      这是已知取舍，写在 05_文档/C11_锐化与全局锐化.md。
+//      这是已知取舍，写在 04_文档/C11_锐化与全局锐化.md。
 //
 // 权重按像素取：m = mask/255，
 //     fine_eff = m·fine + (1−m)·globalFine

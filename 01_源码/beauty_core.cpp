@@ -171,11 +171,22 @@ struct SmoothCfg {
     // 只在掩码包围盒内做滤波。关掉它只能用于「测量全帧成本」这类对照实验，
     // 生产路径必须保持开启：关掉后 93% 的算力会花在随后被丢弃的像素上。
     bool roi = true;
+    // 3.1.40：确认「本帧真的没人」时直接透传，不再退回「无掩码 = 全帧磨皮」。
+    //
+    // 为什么需要这个开关：旧行为（< 3.1.40）在「曾经检测到过脸、之后人走开」
+    // 时会把整幅画面磨一遍 —— 磨皮核把空掩码当「全皮肤」（m = 255），ROI 也
+    // 放开成全帧，于是 1080p 磨皮段从约 5~7 ms 涨到全帧量级，而这些像素随后
+    // 一个都不会被用到（其余九项全挂在 haveMask 之下，本来就不动）。
+    // 观感上还多一个副作用：背景/衣物被一起磨糊。
+    //
+    // 默认开。`BEAUTY_NOFACE_SKIP=0` 逐字节回到 3.1.39 的全帧兜底行为 ——
+    // 只在「想拿无脸帧当纯滤镜磨整幅画面」或「怀疑检测坏了」时才需要。
+    bool noFaceSkip = true;
     // Sobel 边缘门控的灵敏度。0 = 关闭（退回纯掩码混合）。
     // 灵敏度取自 wuxiwuhen/obs-beauty-filter（MIT）的 PSComposite：
     //   edge = saturate(|∇luma| * k),  k 默认 10（该仓库用 ×10.0）
     // 实测：k=10 时高梯度区磨皮量降到 81.8%，低梯度区 100.0% 不变。
-    // 调参见 05_文档/C2_边缘门控与保边核.md
+    // 调参见 04_文档/C2_边缘门控与保边核.md
     int edgeK = 10;
     // 五官保护强度 0..100。磨皮权重会乘 (1 - protect × protectK/100)，
     // 0 = 不保护，100 = 五官区域完全不磨。做法同 lumina 的 uSmoothProtect。
@@ -228,7 +239,7 @@ struct SmoothCfg {
     //   2 = 浮点双边 + 低频参照（权重只看局部起伏）
     //
     // **默认 0 是实测结论，不是保守**：2026-10-28 用 golden 对三条路线做了
-    // 逐项对照（05_文档/C8_低频层对照_浮点与参照.md），把 lumina 那套
+    // 逐项对照（04_文档/C8_低频层对照_浮点与参照.md），把 lumina 那套
     // 「(tap-center)-(refTap-refCenter)」搬到我们 r=2 的核上：
     //   小幅度高频保留 106.0% → 105.4%（几乎不变）
     //   大幅度保留        99.1% → 98.8%（更差）
@@ -285,7 +296,7 @@ struct SmoothCfg {
     // 关键含义：t ≥ 0.7 之后 intensity 恒为 1，**75→100 档的差别不可能来自这里**，
     // 只能来自第一级预模糊 —— 这是第 2 批必须补上 pre_blur 的直接原因。
     // 旧的线性拟合式 e = eLo + (eHi−eLo)·t（0.45→0.60）已删除：它是阶段 3 扫参的
-    // 产物，与源码结构不符（见 00_先读我.md §4.3、C23 §2.3）。
+    // 产物，与源码结构不符（见 C23 §2.3；原载于已移除的 `00_先读我.md` §4.3）。
     float s3K = 1.4286f;          // 强度饱和系数（= 1/0.7，与 step 阈值配套）
     float s3ESat = 0.7f;          // step(0.7, t) 的阈值，用乘之前的 t
     float s3EThr = 0.6f;          // step(0.6, intensity) 的阈值
@@ -412,7 +423,7 @@ struct SmoothCfg {
     // ---- 细节回填（锐化 / 全局锐化）----
     // 中频带增益基准，与参考实现路径的 kMidGain 取同一个值（legacy_engine.cpp）。
     // 这样「锐化 50」在我们的引擎里和在参考实现里指的是同一条曲线：细频带 100% 回填、
-    // 中频带推到原图的 1.65 倍。数值对照见 05_文档/C11_锐化与全局锐化.md。
+    // 中频带推到原图的 1.65 倍。数值对照见 04_文档/C11_锐化与全局锐化.md。
     float detailMidGain = 3.30f;
     // 细频带软阈值：幅值低于它的高频直接不回填。相机噪点与毛孔在幅值上重叠
     // （±2~6 vs 2~8），只能从最细的一端削掉一点；3.0 是「削噪但不动毛孔」的
@@ -503,7 +514,7 @@ struct SmoothCfg {
     // 的输出相减，取连通域的峰值。所以这些数字是「对齐观感」而不是猜的：
     //     五官立体 峰值 +7.3 / -4.7    亮眼 峰值 +44（眼白本就接近饱和）
     //     去黑眼圈 峰值 +7.7           去法令纹 峰值 +3.3
-    // 数据与差分图见 06_离线验证/goldens/_probe/ 与 05_文档/C12_人脸局部五项.md
+    // 数据与差分图见 06_离线验证/goldens/_probe/ 与 04_文档/C12_人脸局部五项.md
     // 上面那组是**峰值**，直接当增益用会过头 —— 峰值是连通域里最亮的几个点，
     // 而椭圆中心一大片都会拿到满增益。下面这版是按「脸内 dY 均值 + p95」对拍
     // 回调过的（core vs 参考实现：立体 +2.97/+6.0 → 目标 +0.64/+5.1，依此类推）。
@@ -612,8 +623,14 @@ uint64_t g_maskSubmits = 0;
 uint64_t g_alignUsed = 0;
 uint64_t g_alignTotal = 0;
 
+// 无脸透传帧数（3.1.40，诊断用）。
+// 为什么需要它：跳过之后引擎耗时直接变 0，「变快了」既可能是跳过生效，
+// 也可能是磨皮根本没跑（参数为 0 / 掩码异常）。有了这个计数，性能行里的
+// noface=N 才能证明「本窗口真的有 N 帧是因为没人而跳过的」。
+uint64_t g_noFaceFrames = 0;
+
 // 掩码参数：人脸框外扩倍数。S1 对拍扫出来 IoU 峰值在 1.15
-// （IoU 0.727 / 精确率 0.934 / 召回率 0.767），见 05_文档/S1_掩码对拍结论.md。
+// （IoU 0.727 / 精确率 0.934 / 召回率 0.767），见 04_文档/S1_掩码对拍结论.md。
 const float kFaceBoxGrow = 1.15f;
 
 // 人脸检测的推理输入边长默认值。
@@ -963,7 +980,9 @@ double nowMsCore() {
 class CoreEngine : public IBeautyEngine {
 public:
     const char* id() const override { return "core"; }
-    const char* version() const override { return "1.4.0"; }
+    // 1.4.0 → 1.4.1（3.1.40）：无脸帧改走逐字节透传，不再全帧兜底磨皮。
+    // 门控语义变了 ⇒ 无脸帧的画面输出与 1.4.0 不同，旧的对拍数字不覆盖这条路径。
+    const char* version() const override { return "1.4.1"; }
 
     bool ensureReady(std::string& err) override {
         // 人脸检测模型只试一次。失败不阻止引擎就绪 —— 降级为「无掩码，全帧磨皮」，
@@ -1128,6 +1147,10 @@ public:
             // 异步检测：BEAUTY_ASYNC_DETECT=0 关掉（离线对拍要确定性）
             const char* ad = getenv("BEAUTY_ASYNC_DETECT");
             if (ad && *ad) g_cfg.asyncDetect = (ad[0] != '0');
+            // 3.1.40：无脸帧是否跳过整段处理。BEAUTY_NOFACE_SKIP=0 回到旧行为
+            // （无掩码 → 全帧兜底磨皮，逐字节等于 3.1.39）。
+            const char* nfs = getenv("BEAUTY_NOFACE_SKIP");
+            if (nfs && *nfs) g_cfg.noFaceSkip = (nfs[0] != '0');
             // 异步提交周期：BEAUTY_MASK_EVERY=4 退回 3.1.7 的节奏（拖影回来，但省 CPU）。
             // 留这个口子是为了让真机能当场对比 0 / 1 / 2 / 4 四档，不用改代码重编译。
             const char* me = getenv("BEAUTY_MASK_EVERY");
@@ -1395,11 +1418,41 @@ public:
         //     首帧必超 30fps 预算（实测首帧 42 ms vs 稳态 19 ms）；
         //   · 观感：整幅画面先糊一下，等掩码到了再跳回「只磨脸」——每次开开关
         //     都闪一次背景。
-        // 一旦得到过掩码就不再走这条分支：后面「人真的走开了」仍按原逻辑全帧兜底，
-        // 与旧行为逐字节一致。
+        // 一旦得到过掩码就不再走这条分支 ⇒ 交给下面的「无脸透传」（3.1.40）
+        // 与「全帧兜底」按 lastFaces_ 分流。
         if (needMask && !haveMask && faceOk_ && !everHadMask_) {
             if (dst != src) memcpy(dst, src, need);
             lastMs_ = 0.0;
+            return true;
+        }
+
+        // 3.1.40：**确认本帧没人 → 直接透传**，不再退回全帧磨皮。
+        //
+        // 旧行为（≤ 3.1.39）在「曾经检测到过脸、之后人走开」时会一直走全帧兜底：
+        // 磨皮核把空掩码当「全皮肤」（m = 255）、ROI 也放开成全帧，于是 1080p
+        // 磨皮段从「只磨 ROI（12.6%）约 5~7 ms」涨到全帧量级（720p 全帧带通
+        // 实测 10.3 ms，按像素比推算 1080p ≈ 23 ms），**而这些像素随后一个都
+        // 用不到**——色调/清晰/五官/细节全部挂在 haveMask 之下，美形要 faces_
+        // 非空（见 wantWarp 的调用点）。观感上还多一个副作用：背景、衣物、
+        // 商品被一起磨糊。
+        //
+        // 判据四条必须同时成立，缺一条都会把「暂时算不出来」误判成「没人」：
+        //   ① faceOk_     模型可用（模型没加载时 updateMask 第一句就 return false，
+        //                 此时跳过等于「检测坏了 = 完全没美颜」，比慢更难排查）；
+        //   ② everHadMask_ 历史上真的得到过掩码（否则上面那条分支已经处理了）；
+        //   ③ lastFaces_ == 0  最近一次检测**跑完**且一张脸都没有；
+        //   ④ faceErr_ 里没有 "err=" —— 那是推理/模型错误的标记，不是「没脸」。
+        //      onDetectFailed 对这两种情况写的是同一条 lastFaces_ = 0，只能靠
+        //      错误串区分；宁可多算（退回全帧），也不要静默不磨。
+        //
+        // 迟滞不用自己加：kMaskHold = 6 已让「人走出去」先沿用旧掩码 6 帧，
+        // 第 7 帧起才进这里；人走回画面时检出当帧即恢复，不会闪。
+        // BEAUTY_NOFACE_SKIP=0 逐字节回到 3.1.39 的行为。
+        if (g_cfg.noFaceSkip && needMask && !haveMask && faceOk_ && everHadMask_ &&
+            lastFaces_ == 0 && faceErr_.find("err=") == std::string::npos) {
+            if (dst != src) memcpy(dst, src, need);
+            lastMs_ = 0.0;
+            g_noFaceFrames++;
             return true;
         }
 
@@ -3170,4 +3223,15 @@ int beautyCoreAlignStat(uint64_t* used, uint64_t* total) {
     if (used) *used = g_alignUsed;
     if (total) *total = g_alignTotal;
     return 0;
+}
+
+// 3.1.40 探针：启动以来「因确认无脸而整段跳过」的帧数（累计值）。
+// 滤镜侧取窗口差值输出 noface=N，用来证明跳过真的发生了。
+uint64_t beautyCoreNoFaceFrames() {
+    return g_noFaceFrames;
+}
+
+// 3.1.40：给滤镜侧 init 日志用（1 = 开 / 0 = 旧的全帧兜底）。
+int beautyCoreNoFaceSkip() {
+    return g_cfg.noFaceSkip ? 1 : 0;
 }

@@ -48,7 +48,7 @@
 
 // source id。**永远不要改** —— 场景文件里存的是这个字符串。
 // 3.1.21 起不再注册「旧 id 别名」：老场景已在装机脚本里一次性迁移到本 id
-// （见 05_文档/CHANGELOG 3.1.21）。留两个 id 只会让滤镜列表出现两个条目。
+// （见 04_文档/CHANGELOG 3.1.21）。留两个 id 只会让滤镜列表出现两个条目。
 
 // ---------------------------------------------------------------------------
 // 引擎 → OBS 日志钩子。模块加载时装一次；不装的话引擎消息落到 stderr。
@@ -158,7 +158,7 @@ struct beauty_filter {
 	// 性能埋点（BEAUTY_PROFILE=1 时才统计/输出）
 	// 为什么要埋这个：插件每帧要把整帧从 GPU 下载到 CPU 再传回去，
 	// 1080p RGBA 是 8 MB × 2。这笔开销从未实测过，而它是「要不要整体
-	// 改走 GPU」的唯一决策依据。见 05_文档/开源参考仓库_对照与可复用清单.md §3。
+	// 改走 GPU」的唯一决策依据。见 04_文档/开源参考仓库_对照与可复用清单.md §3。
 	bool prof_on;
 	int prof_frames;
 	double prof_dl;    // 累计下载耗时 ms
@@ -171,6 +171,10 @@ struct beauty_filter {
 	// 比全量比率更容易看出 worker 是不是间歇性追不上。
 	uint64_t prof_align0_used;
 	uint64_t prof_align0_total;
+	// 3.1.40：无脸透传帧数的窗口基线（同上取差值）。
+	// noface=N 表示「本窗口内有 N 帧因为确认没人而整段跳过」。没有它的话，
+	// 引擎耗时归零既可能是跳过生效，也可能是磨皮压根没跑 —— 无法归因。
+	uint64_t prof_noface0;
 	bool enabled;
 	bool mirror;
 	int blur_type;    // 1=双边(最强) 0=高斯 2=弱磨皮
@@ -342,7 +346,7 @@ static const char *beauty_filter_name(void *unused)
  * 用户要求「悬停备注也不需要」—— 面板与 OBS 原生属性页都不再显示任何
  * long_description。标签名本身已经说清功能，长文案只会变成噪音。
  * 历史文案（3.1.21 重写的那一版，含各项实测量级）见 git 历史 /
- * 05_文档\CHANGELOG_提交记录.md 的 3.1.27 之前条目。 */
+ * 04_文档\CHANGELOG_提交记录.md 的 3.1.27 之前条目。 */
 
 /* 3.1.22：按 key 建滑块。
  * 属性改成按功能分组之后，滑块不再是一个 for 循环建出来的，只能按名字找。
@@ -749,12 +753,18 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 			const uint64_t al_dt = al_total - f->prof_align0_total;
 			f->prof_align0_used = al_used;
 			f->prof_align0_total = al_total;
+			// 3.1.40：无脸透传帧数同样取窗口差值。它是「跳过真的发生了」的唯一
+			// 直接证据 —— 引擎耗时 0.00 也可能只是磨皮参数为 0。
+			const uint64_t nf_all = beautyCoreNoFaceFrames();
+			const uint64_t nf_du = nf_all - f->prof_noface0;
+			f->prof_noface0 = nf_all;
 			blog(LOG_INFO,
 			     "[" PLUGIN_NAME "] 性能 %ux%u：下载 %.2f + 引擎 %.2f + 上传 %.2f"
-			     " = %.2f ms/帧（%d 帧平均）对齐 %llu/%llu（%.0f%%）",
+			     " = %.2f ms/帧（%d 帧平均）对齐 %llu/%llu（%.0f%%）无脸跳过 %llu",
 			     cx, cy, dl, pr, up, dl + pr + up, f->prof_frames,
 			     (unsigned long long)al_du, (unsigned long long)al_dt,
-			     al_dt ? (double)al_du * 100.0 / (double)al_dt : 100.0);
+			     al_dt ? (double)al_du * 100.0 / (double)al_dt : 100.0,
+			     (unsigned long long)nf_du);
 			f->prof_frames = 0;
 			f->prof_dl = 0.0;
 			f->prof_proc = 0.0;
@@ -905,6 +915,10 @@ bool obs_module_load(void)
 		msg += std::to_string(e.itemId());
 		msg += ", owner_thread=";
 		msg += std::to_string(e.ownerThread());
+		// 3.1.40：无脸透传开关状态。排查「无人画面还是卡」时，这一位能直接
+		// 排除「被 BEAUTY_NOFACE_SKIP=0 回退掉了」这种可能。
+		msg += ", noface_skip=";
+		msg += beautyCoreNoFaceSkip() ? "on" : "off";
 		msg += ")";
 		blog(LOG_INFO, "[" PLUGIN_NAME "] %s", msg.c_str());
 		// C20：皮肤判据快照。真机「磨皮没效果」的头号原因是肤色掩码被白平衡
@@ -921,8 +935,9 @@ bool obs_module_load(void)
 			blog(LOG_WARNING,
 			     "[" PLUGIN_NAME "] core engine has NO face mask: %s. "
 			     "Falling back to full-frame smoothing (higher CPU, most effects "
-			     "disabled). Check onnxruntime.dll + models\\yunet.onnx next to "
-			     "the plugin dll.",
+			     "disabled). 3.1.40 起「模型正常、但本帧确实没人」会直接透传，"
+			     "只有模型不可用时才走全帧兜底。Check onnxruntime.dll + "
+			     "models\\yunet.onnx next to the plugin dll.",
 			     (e.lastErr() && e.lastErr()[0]) ? e.lastErr() : "(no detail)");
 		}
 	}

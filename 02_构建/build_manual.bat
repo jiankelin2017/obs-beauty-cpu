@@ -2,9 +2,16 @@
 rem Manual MSVC build without vcvars64.bat (reg.exe is blocked in this sandbox)
 rem NOTE: this file is pure ASCII on purpose. The source tree lives under a
 rem       Chinese-named path; a UTF-8 .bat gets read as GBK by cmd.exe and the
-rem       literal path is mangled (C1083). So the two directories are located
-rem       with wildcards taken from the runtime path instead of being written
-rem       out as text.
+rem       literal path is mangled (C1083). So the directories are located by
+rem       CONTENT PROBING instead of by name.
+rem
+rem 2026-11-01: the old version matched directories by prefix ("00_*", "04_*",
+rem       "06_*"). Those prefixes became stale after the 2026-10-30 re-naming
+rem       (source -> 01_*, dependency -> under the new
+rem       "reference files" folder, offline-verify -> 05_*), so the script
+rem       inputs and failed with "source dir not found".
+rem       Now each role is identified by a file that must exist inside it,
+rem       so re-numbering the tree cannot break the build again.
 setlocal enabledelayedexpansion
 set VSBASE=C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231
 set SDKBASE=C:\Program Files (x86)\Windows Kits\10
@@ -18,22 +25,36 @@ set HERE=%~dp0
 set ROOT=%HERE%..
 set SRC=
 set DEP=
-for /d %%d in ("%ROOT%\00_*") do set SRC=%%d
-for /d %%d in ("%ROOT%\04_*") do set DEP=%%d
-for /d %%d in ("%ROOT%\06_*") do set OFFDIR=%%d
+set OFFDIR=
+
+rem --- locate the source dir: the one holding obs-beauty.cpp --------------
+for /d %%d in ("%ROOT%\01_*") do if exist "%%d\obs-beauty.cpp" set SRC=%%d
+rem --- locate the dependency dir: holds obs-studio-32.1.1\libobs ---------
+rem     it may sit at the tree root or one level down (e.g. under a
+rem     "reference files" folder), so probe both depths.
+for /d %%d in ("%ROOT%\*") do if exist "%%d\obs-studio-32.1.1\libobs" set DEP=%%d
+for /d %%d in ("%ROOT%\*") do for /d %%e in ("%%d\*") do if exist "%%e\obs-studio-32.1.1\libobs" set DEP=%%e
+rem --- locate the offline-verify dir: the one holding deps\runtime\include -
+for /d %%d in ("%ROOT%\05_*") do if exist "%%d\deps\runtime\include" set OFFDIR=%%d
+
 set OUT=%HERE%build_output
 if not exist "%OUT%" mkdir "%OUT%"
 
 if not defined SRC (
-    echo [build] source dir not found under %ROOT%
+    echo [build] source dir not found (looked for obs-beauty.cpp under %ROOT%)
     exit /b 1
 )
 if not defined DEP (
-    echo [build] dependency dir not found under %ROOT%
+    echo [build] dependency dir not found (looked for obs-studio-32.1.1\libobs under %ROOT%)
+    exit /b 1
+)
+if not defined OFFDIR (
+    echo [build] offline-verify dir not found (looked for deps\runtime\include under %ROOT%)
     exit /b 1
 )
 echo [build] src=%SRC%
 echo [build] dep=%DEP%
+echo [build] offdir=%OFFDIR%
 
 rem --- keep a copy of the currently installed build before overwriting ---
 if exist "%OUT%\obs-beauty.dll" (

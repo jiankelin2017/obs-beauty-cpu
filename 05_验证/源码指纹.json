@@ -1,0 +1,30 @@
+{
+ "filter": "f22a7839ee6322591963651b572afda8b09d9374d942751d6811ee5b92883c0d",
+ "ui": "ae9e69a4030eb5fc020718c87f68702cd938e3c6e5527d189bd6339822044aaf",
+ "all": "977c69e490305ace39721fc942c10b6e546f841dba69eedcdae3c5ee9a87eccf",
+ "files": [
+  "beauty_core.cpp=0715c14f984a3d85",
+  "beauty_core.h=dc5ec7fd9eea7e53",
+  "beauty_face.cpp=33ebce8e54900924",
+  "beauty_face.h=b98a5a09d8de57d3",
+  "beauty_freq.cpp=b0117d9c464f814d",
+  "beauty_freq.h=a6f62f67d86852e6",
+  "beauty_guide.cpp=7525b26dfcf8e288",
+  "beauty_guide.h=384e79fa545ec803",
+  "beauty_log.cpp=8d8972a366052563",
+  "beauty_log.h=ca4a1879fcc544f1",
+  "beauty_onnx.cpp=bc471bdf81d341ea",
+  "beauty_onnx.h=75f72009a779f0ec",
+  "beauty_params.h=13c28a159fffe269",
+  "beauty_pool.cpp=39d7cac4ef94ee24",
+  "beauty_pool.h=c6d3c68806ae3ead",
+  "beauty_region.cpp=9a909f59b4746a2e",
+  "beauty_region.h=06fd85a1d05c9ebd",
+  "beauty_smooth.cpp=dbf873afee890eac",
+  "beauty_smooth.h=b56973813849a08a",
+  "beauty_warp.cpp=6a8e297f357d3605",
+  "beauty_warp.h=a39b7224787bf07d",
+  "obs-beauty-ui.cpp=37f7705db8121123",
+  "obs-beauty.cpp=3138406627fa8b46"
+ ]
+}

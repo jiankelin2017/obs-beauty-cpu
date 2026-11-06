@@ -54,7 +54,7 @@ void freqCompositePlanes(const unsigned char* src, unsigned char* dst,
 // clarity（清晰 / 大半径局部对比）
 //
 // 为什么需要它：磨皮的幅度门控只削 6~30 的中频，而实测我们**已经保住了 96.8%
-// 的中频**（05_文档/D1 §4）—— 立体感的差距不是「被磨掉了」，而是「从来没增强过」。
+// 的中频**（04_文档/D1 §4）—— 立体感的差距不是「被磨掉了」，而是「从来没增强过」。
 // 所以只能主动加：把 25px 尺度上的明暗差按比例加回去，脸就不塌。
 //
 // 为什么半径必须是 17~25px：磨皮的核动的是 ≤8px（毛孔、痘印），立体感在 10~30px
@@ -76,7 +76,7 @@ void clarityRgb(unsigned char* dst, int w, int h, const unsigned char* mask,
                 const RoiRect& roi, const ClarityParams& p, int threads,
                 std::vector<float>& scratch);
 
-// 默认参数（离线标定，见 05_文档/C4_高低频磨皮.md）
+// 默认参数（离线标定，见 04_文档/C4_高低频磨皮.md）
 struct FreqParams {
     // 低频层：双边迭代。radiu/ters 一起决定低频尺度（等效半径 ≈ radius × iters）
     int radius = 2;
