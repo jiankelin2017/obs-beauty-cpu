@@ -1,8 +1,36 @@
 # -*- coding: utf-8 -*-
-"""自研引擎（CoreEngine）vs SDK —— 逐档位离线对拍。
+"""core_vs_sdk.py 0.1.0 —— 自研引擎（CoreEngine）vs SDK：逐档位离线对拍。
 
 不加载 LegacySDK，只跑自研核（beauty_core_test.dll），再和 golden 里已固化的
 SDK 输出比。判据是**档位响应曲线**：用户拖滑块看到的是曲线，不是单点。
+
+## 0.1.0 修正：移除伪配置扫描，并写明本报告的能力边界
+
+旧版在这里列了 8 组 `radius / sigmaSpace / sigmaColor / down` 做「配置扫描」，
+并按曲线 RMSE 排序。2026-11-06 用独立子进程实测，这 8 组给出**完全相同的输出**：
+当前 DLL 默认 `smoothModel = 1`、`s3Band = 1`（`01_源码/beauty_core.cpp`），
+`process()` 走 `surface3RgbBand`，不消费上述四个双边滤波参数；即使显式设
+`BEAUTY_SMOOTH_MODEL=legacy`，因 `freqMode = 1` 与 `lowPath = 3`，走的仍是盒式
+高低频，同样不读它们。实测 `def_r2 / def_r6 / def_down2` 三份输出 sha256 前 16 位
+全为 `36bf9d1547ff12f8`（maxdiff=0），`leg_r2 / leg_r6` 同为 `ac7c2af4bf2cbd6a`。
+真正改变输出的是 `BEAUTY_SMOOTH_MODEL` 与 `blur` 档位（后者本就是本脚本的横轴）。
+
+0.1.0 因此把配置收缩为**一组「当前默认核」**，并在运行时做一次逐字节敏感性自检；
+报告也不再把 RMSE 当作「哪个配置更接近 SDK」的判据。
+
+**能力边界（务必先读）**：本报告的 SDK 基准取自
+`goldens_legacy/flat/blur%03d_bt1/out.raw`，即 `ref_golden.dll` 显式下发
+`blur_type=1` 的输出。归档件 `docs/archive/ab-smooth-20261106.md` 已说明产品实际
+生效的不是 bt1 口径，所以这里的 RMSE **不能当作画质达标与否的判据**。78 组 flat
+同理是 SDK 快照，当前自研引擎与 `blur050_bt1` 实测 maxdiff=11、
+263782/1008640 个像素不同，本来就不该逐字节相等。
+
+本机 78 组实测还给出一条方向性证据：同档位下 `bt2` 快照与当前引擎的差异最小
+（25/50/75/100 四档的「不同通道数」与「平均绝对差」全部低于 `bt0` / `bt1`）；
+换 `bt2` 基准后曲线 RMSE 由 14.9 降到 5.0。但 5.0 仍高于本脚本自述的经验阈值
+「约 2 个百分点以内看不出差别」，且产品真值到底对应哪组 flat 需要用户确认，
+所以 0.1.0 **不擅自更换基准**。要关闭根 `README.md` §8 第 3 项的
+「画质 golden A/B」，仍需先定义产品真值基准与达标判据，本脚本不提供这两样。
 
 ## 口径（2026-10-28 修正，重要）
 
@@ -95,17 +123,11 @@ def run_core(dll, raw_in, raw_out, blur, radius, ss, sc, down):
     return rc, m, ms
 
 
-# 配置扫描：down 是降采样倍率，radius/sigmaSpace 按低分辨率解释。
-# 降采样已证伪（曲线误差 27+），保留 down2/down4 两组仅作反例留档。
+# 0.1.0：只保留一组「当前默认核」。旧 8 组的 radius / ss / sc / down 在默认核
+# 与 legacy 核下都不改变输出（逐字节相同，见文件头），再按 RMSE 排序只会误导。
+# 这里的四个值只是沿用 BeautyCoreRun 的调用签名，不是可调维度。
 CONFIGS = [
-    ('当前默认 r2/ss7', 2, 7.0, 40.0, 1),
-    ('r3/ss10', 3, 10.0, 40.0, 1),
-    ('r4/ss13.5', 4, 13.5, 40.0, 1),
-    ('r4/ss13.5 sc50', 4, 13.5, 50.0, 1),
-    ('r5/ss17', 5, 17.0, 40.0, 1),
-    ('r6/ss20', 6, 20.0, 40.0, 1),
-    ('r4/ss13.5 sc60', 4, 13.5, 60.0, 1),
-    ('反例 r2/ss6.75 down2', 2, 6.75, 40.0, 2),
+    ('当前默认核（smoothModel=1 / s3Band=1）', 2, 7.0, 40.0, 1),
 ]
 
 
@@ -119,6 +141,32 @@ def main():
     src_p = os.path.join(SRC, SCENE + '.raw')
     src = load(src_p)
     sdk100 = load(os.path.join(LEGACY, 'flat', 'blur100_bt1', 'out.raw'))
+
+    # ---- 0.1.0 参数敏感性自检 ----
+    # 同一档位、两次不同 radius/sigmaSpace 的调用，若输出逐字节相同，就证明
+    # BeautyCoreRun 这四个参数在当前默认核下不参与计算。结果必须显式打印，
+    # 免得有人再把「按 RMSE 排序」当成选配置或判达标的依据。
+    probes = []
+    for i, (pr, pss) in enumerate(((2, 7.0), (6, 20.0))):
+        p = os.path.join(OUT, '_cvs_probe_%d.raw' % i)
+        rc, msg, _ = run_core(dll, src_p, p, 50, pr, pss, 40.0, 1)
+        if rc != 0:
+            print('[core] 自检调用失败 rc=%d %s' % (rc, msg))
+            return 3
+        probes.append(p)
+    try:
+        pa = np.fromfile(probes[0], np.uint8)
+        pb = np.fromfile(probes[1], np.uint8)
+        param_inert = bool(np.array_equal(pa, pb))
+    finally:
+        for p in probes:
+            if os.path.exists(p):
+                os.remove(p)
+    if param_inert:
+        print('[core] 自检：radius/sigmaSpace 在当前默认核下逐字节不改变输出；'
+              '旧 8 组配置扫描为伪扫描，本表曲线只作记录、不作画质达标判据。')
+    else:
+        print('[core] 自检：参数会改变输出；若默认磨皮核已更换，请复核本脚本口径。')
 
     # ---- 比较区域 ----
     # 旧口径（仅对照）：SDK 100 档改动的像素。实测是纹理区，不是皮肤区。
@@ -189,9 +237,13 @@ def main():
               % (label, '/'.join('%.1f' % k for k in keeps), err, avg_ms))
 
     results.sort(key=lambda x: x['err'])
-    md = ['# 自研引擎（CoreEngine）vs SDK —— 档位曲线与性能\n',
+    md = ['# 自研引擎（CoreEngine）vs SDK —— 档位曲线与性能（0.1.0 口径修正）\n',
           '> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M:%S'),
-          '> 自研核：`beauty_smooth.cpp` 双边滤波（定点 LUT）+ 线性混合',
+          '> 台架：`core_vs_sdk.py` 0.1.0；参数敏感性自检 = %s'
+          % ('参数不改变输出，旧 8 组配置扫描已移除' if param_inert
+             else '参数会改变输出，需复核口径'),
+          '> 自研核：当前 DLL 默认 `smoothModel=1 / s3Band=1` 的 surface3 带通路径，'
+          '**不是** `beauty_smooth.cpp` 的双边滤波',
           '> 素材 %s·%d×%d；**比较区域 = %s**' % (SCENE, W, H, reg_name),
           '',
           '## 口径说明（2026-10-28 修正）\n',
@@ -209,9 +261,9 @@ def main():
           '|---|' + '---|' * len(LEVELS),
           '| SDK | ' + ' | '.join('%.1f' % sdk_keep.get(lv, 0) for lv in LEVELS) + ' |',
           '',
-          '## 配置扫描（按曲线误差排序）\n',
+          '## 当前默认核的档位曲线（仅记录，不用于选配置或判达标）\n',
           '| 配置 | ' + ' | '.join('%d档' % lv for lv in LEVELS) +
-          ' | 曲线RMSE | 耗时ms |',
+          ' | 曲线RMSE(仅记录) | 耗时ms |',
           '|---|' + '---|' * (len(LEVELS) + 2)]
     for x in results:
         md.append('| %s | %s | %.2f | %.1f |'
@@ -220,13 +272,39 @@ def main():
     md.append('')
     md.append('> 曲线RMSE 单位是「百分点」，小于约 2 个百分点看不出差别。'
               '耗时是 640×394 单帧、CPU、含混合。1080p 约为它的 4.5 倍。')
+    md.append('')
+    md.append('## 本报告不能作为画质 golden A/B 的依据\n')
+    md.append('1. **旧 8 组配置扫描是伪扫描，已移除**。当前默认核走 '
+              '`surface3RgbBand`，不消费 `radius / sigmaSpace / sigmaColor / down`；'
+              '切到 legacy 核也因 `freqMode=1 / lowPath=3` 走盒式高低频而不读它们。'
+              '独立进程实测不同配置的输出逐字节相同（maxdiff=0），'
+              '所以此前那张「按 RMSE 排序」的表没有区分度。')
+    md.append('2. **SDK 基准口径与产品不一致**。本表的 SDK 曲线取自 '
+              '`goldens_legacy/flat/blur%03d_bt1/out.raw`，即 `ref_golden.dll` '
+              '显式下发 `blur_type=1` 的输出；归档件 '
+              '`docs/archive/ab-smooth-20261106.md` 已说明产品实际生效的不是 bt1 口径，'
+              '因此这里的 RMSE 不能回答「画质达不达标」。本机 78 组实测中 `bt2` '
+              '快照与当前引擎的差异最小，换基准后 RMSE 由 14.9 降到 5.0；'
+              '但 5.0 仍高于经验阈值约 2，且基准该选哪组需用户确认，'
+              '故 0.1.0 未更换基准。')
+    md.append('3. **78 组 flat 不适用于当前引擎的逐字节复现**。它们是 SDK 快照，'
+              '当前自研引擎与 `blur050_bt1` 实测 maxdiff=11、'
+              '263782/1008640 个像素不同，算法不同本就不该相等；'
+              '`golden_capture.py verify` 验证的是 SDK 自身的复现率。')
+    md.append('4. **要关闭根 `README.md` §8 第 3 项的「画质 golden A/B」，'
+              '还缺产品真值基准的定义与判据**。本脚本只提供一组口径明确的档位曲线记录，'
+              '不提供这两样，也不改 `01_源码/`。')
 
     out = os.path.join(OUT, 'core_vs_sdk.md')
     with open(out, 'w', encoding='utf-8') as f:
         f.write('\n'.join(md))
     print('[core] -> %s' % out)
     with open(os.path.join(OUT, 'core_vs_sdk.json'), 'w', encoding='utf-8') as f:
-        json.dump({'region': reg_name,
+        json.dump({'bench_version': '0.1.0',
+                   'param_scan_inert': param_inert,
+                   'sdk_basis': 'ref_golden.dll blur_type=1 (goldens_legacy/flat/*/out.raw)',
+                   'usable_as_golden_ab': False,
+                   'region': reg_name,
                    'region_pct': float(100.0 * reg.mean()),
                    'region_white_pct': float(100.0 * white[reg].mean()),
                    'reg_sdk_pct': float(100.0 * reg_sdk.mean()),
