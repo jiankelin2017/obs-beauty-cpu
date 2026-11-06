@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""bench_core.py 0.1.0 —— CoreEngine 的 CPU 性能基线 / 优化后对比
+"""bench_core.py 0.1.1 —— CoreEngine 的 CPU 性能基线 / 优化后对比
 
 测三档分辨率下 process() 的真实耗时，并按**确定性节拍**把「纯磨皮帧」与
 「含检测帧」分开统计，再按生产口径给出 30fps 均摊值。
@@ -9,8 +9,8 @@
 0.1.0 之前的版本用「2 倍中位数切一刀」（`ms > median * 1.8` 判为检测帧）。
 实测这个判据**从来没生效过**：三档分辨率全部给出 `含检测 = None`，
 均摊值退化成「混在一起的均值」。原因是检测帧相对纯磨皮帧的真实倍率只有
-约 1.5x（1080p 实测 ~31ms vs ~20ms），远达不到 1.8 的阈值；低分辨率下
-两者几乎持平，更是完全分不开。
+约 1.5x（当时 1080p 实测 ~31ms vs ~20ms；绝对值已被 0.1.1 作废，但「判据
+失效」这一事实不变），远达不到 1.8 的阈值；低分辨率下两者更是完全分不开。
 
 现在的做法：不再猜阈值，而是利用**调用序号**直接确定每帧的身份。
 `01_源码/beauty_core.cpp` 的同步路径里 `maskAge_` 从 0 起算、`kMaskEverySync = 4`，
@@ -23,12 +23,35 @@
 `01_源码/beauty_core.cpp` 里 `kMaskEverySync` 的注释也自述「按 1/5 摊」，
 与 4:1 一致。
 
-0.1.0 还补了一个**口径开关** `--async`。原因：默认的同步模式下检测压在
-渲染线程上、每 5 帧集中收一次钱；而生产（`01_源码/beauty_core.cpp` 的
-`g_cfg.asyncDetect` 默认 true）是检测跑在 worker 上、每帧提交一次。
-同一份二进制实测两种模式差得很远（640x394：同步 11.1ms vs 异步 3.6ms 每帧），
-所以「同步台架的数」不能直接当生产帧预算用。异步模式下帧时间与预测节拍无关，
-本脚本只报分布（p50/p95/max），不报三组数。
+为什么 0.1.1 必须关掉台架的逐帧预热
+------------------------------------
+0.1.0 跑出来的基线里，640x394 / 720p 的「含检测」与「纯磨皮」几乎同价
+（1.04x / 0.90x），1080p 却干净地分开（1.45x）。追下来是**离线台架自身的
+副作用**，不是引擎特性：
+
+* `01_源码/core_probe.cpp` 的 `BeautyCoreRun()` **每一帧**都调 `ensureReady()`；
+* `ensureReady()` 末尾无条件调 `warmUp()`（`01_源码/beauty_core.cpp`）；
+* `warmUp()` 会额外跑一次完整的 YuNet 推理（合成 640×360 灰帧），这次推理在
+  `process()` 之外，因此**不计入 `lastCoreMs()`**；同时它把 `mask_` 按固定的
+  1920×1080 重新 `assign`，小分辨率下 `updateMask()` 下一帧又会改回 w×h，
+  两条路每帧互相覆盖，顺带把 `maskAge_` 反复压回 999 ⇒ 小分辨率**根本没有
+  沿用帧**，全是重算帧，所以按序号分出来的两组当然同价。
+
+验证：`BEAUTY_NO_PREWARM=1`（源码里现成的 A/B 开关）之后，三档都出现清晰的
+周期 5；强制每帧重算（在 w×h 与 (w+1)×h 之间交替）使三档帧时间分别
+3.6→13.1 / 7.5→17.7 / 20.2→30.7 ms，检测开销约 +10ms 且与分辨率无关，
+与「YuNet 640×640 推理」一致。关掉预热后墙钟/帧也从 28.4→12.6 ms（640x394）。
+
+结论：本脚本必须设 `BEAUTY_NO_PREWARM=1`，把一次性预热留给热机帧自己吸收。
+生产环境不会每帧调 `ensureReady()`，这个开关反而让台架更贴近稳态。
+**0.1.0 的 sync_20261106 / async_20261106 两组基线数字因此作废，已用 0.1.1 重跑覆盖。**
+
+0.1.0 还补了一个**口径开关** `--async`。原因：同步模式下检测压在渲染线程上、
+每 5 帧集中收一次钱；而生产（`01_源码/beauty_core.cpp` 的 `g_cfg.asyncDetect`
+默认 true）是检测跑在 worker 上、每帧提交一次。两种口径不能互换：0.1.1 在
+关掉逐帧预热后实测 640x394 同步均摊 5.01ms、异步帧 p50 3.58ms，差额约 1.4ms
+正好是「1/5 × 检测开销」；worker 侧的推理成本体现在 CPU 占用上，不在帧时间里。
+异步模式下帧时间与检测节拍无关，本脚本只报分布（p50/p95/max），不报三组数。
 
 用法：
     python bench_core.py                     # 同步模式，tag=base（会覆盖同名历史快照，慎用）
@@ -38,8 +61,8 @@
 
 输出：`05_验证/goldens/masks/bench_<tag>.{md,json}`
 
-版本：0.1.0（普通升级：修正分组判据与均摊权重；CPU 产品版本轴仍由
-`01_源码/beauty_params.h` 单点维护，与脚本自身版本互不相干）
+版本：0.1.1（普通升级：关掉台架逐帧预热，修回小分辨率的节拍与绝对值；
+CPU 产品版本轴仍由 `01_源码/beauty_params.h` 单点维护，与脚本自身版本互不相干）
 """
 
 import ctypes
@@ -58,13 +81,12 @@ RES = os.path.join(HERE, 'goldens', 'res')
 OUT = os.path.join(HERE, 'goldens', 'masks')
 
 SIZES = [('640x394', 640, 394), ('720p', 1280, 720), ('1080p', 1920, 1080)]
-REPEAT = 12          # 旧版字段名保留在 JSON 里，新口径见 CYCLES
 # 同步路径的检测周期：maskAge_ 从 0 起算 + kMaskEverySync = 4
 # ⇒ 「1 帧重算 + 4 帧沿用」= 5 帧一轮；检测帧满足 j % 5 == 0。
 CYCLE = 5
 PURE_PER_CYCLE = CYCLE - 1     # 4 帧沿用
 CYCLES = 6                     # 每档测 6 轮 = 6 检测 + 24 沿用
-WARMUP_CYCLE = 1               # 热机 = 1 个完整周期，顺带把相位落在「下帧是检测」
+WARM_FRAMES = 2 * CYCLE        # 热机 2 轮（10 帧），10 % 5 == 0 不破坏相位
 
 
 def ascii_path(p):
@@ -131,6 +153,10 @@ def main():
     # 同步模式：节拍分组的前提。异步时「第 k 帧用哪份掩码」取决于线程调度，
     # 序号与身份不再一一对应，只能报帧时间分布。
     os.environ['BEAUTY_ASYNC_DETECT'] = '1' if mode == 'async' else '0'
+    # 关键：core_probe.cpp 每帧都调 ensureReady() → warmUp()，后者会额外跑一次
+    # YuNet 推理（不计入 lastCoreMs）并把 maskAge_ 反复压回 999。不关掉它，
+    # 小分辨率就没有「沿用帧」，分组与绝对值全是错的。见文件头 0.1.1 说明。
+    os.environ['BEAUTY_NO_PREWARM'] = '1'
 
     dll = ctypes.WinDLL(DLL)
     dll.BeautyCoreRun.argtypes = [ctypes.c_char_p, ctypes.c_char_p,
@@ -143,8 +169,9 @@ def main():
     tmp = os.path.join(OUT, '_bench_out.raw')
     report = []
 
-    # 异步模式要多热几帧：worker 要先把第一份掩码交回来，否则头几帧是透传。
-    warm = (WARMUP_CYCLE * CYCLE) if mode == 'sync' else 8
+    # 关掉逐帧预热后，ORT arena / 线程池 / 工作缓冲的首帧一次性成本要由热机帧
+    # 自己吸收；两轮周期（10 帧）足够，且 10 % 5 == 0 不破坏相位对齐。
+    warm = WARM_FRAMES
     total = cycles * CYCLE
     if mode == 'sync':
         print('[bench] 模式=同步；节拍：1 检测 + %d 沿用 = 周期 %d；热机 %d 帧，每档测 %d 帧'
@@ -265,7 +292,7 @@ def main():
     if mode == 'async':
         md = ['# CoreEngine CPU 帧时间分布（异步检测） —— %s\n' % tag,
               '> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M:%S'),
-              '> 磨皮 50 档，down=1（未降采样）；`BEAUTY_ASYNC_DETECT=1`',
+              '> 磨皮 50 档，down=1（未降采样）；`BEAUTY_ASYNC_DETECT=1`、`BEAUTY_NO_PREWARM=1`',
               '> 每档 %d 帧（热机另算 %d 帧）\n' % (cycles * CYCLE, warm),
               '| 分辨率 | p50 | p95 | max | 均值 | 预算余量(33ms) |',
               '|---|---|---|---|---|---|']
@@ -284,7 +311,7 @@ def main():
     else:
         md = ['# CoreEngine CPU 性能基线 —— %s\n' % tag,
               '> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M:%S'),
-              '> 磨皮 50 档，down=1（未降采样）；`BEAUTY_ASYNC_DETECT=0` 强制同步',
+              '> 磨皮 50 档，down=1（未降采样）；`BEAUTY_ASYNC_DETECT=0` 强制同步、`BEAUTY_NO_PREWARM=1`',
               '> 每档 %d 轮 × %d 帧 = %d 帧（热机另算 %d 帧）\n'
               % (cycles, CYCLE, cycles * CYCLE, warm),
               '| 分辨率 | 纯磨皮帧 p50 | 含检测帧 p50 | 30fps 均摊 | 预算余量(33ms) |',
@@ -316,6 +343,11 @@ def main():
                   '帧时间见同名的 `--async` 输出。')
         md.append('> 均摊值只覆盖引擎层；插件层 `gs_stagesurface_map` 下载与 '
                   '`gs_texture_set_image` 上传往返不在其中。')
+
+    md.append('> `BEAUTY_NO_PREWARM=1` 是本脚本必须的：`core_probe.cpp` 每帧都调 '
+              '`ensureReady()` → `warmUp()`，后者会额外跑一次 YuNet 推理（不计入 '
+              '`lastCoreMs`）并把 `maskAge_` 反复压回 999；不关掉它，小分辨率就没有 '
+              '「沿用帧」，按序号分出来的两组会几乎同价。一次性预热成本已由热机帧吸收。')
 
     out_md = os.path.join(OUT, 'bench_%s.md' % tag)
     with open(out_md, 'w', encoding='utf-8') as f:
