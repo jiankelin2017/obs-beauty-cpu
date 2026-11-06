@@ -170,6 +170,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | 变更日志（全局唯一） | `docs/CHANGELOG.md` |
 | CPU 性能设计 | `docs/design/design-cpu-performance.md` |
 | 安装包构建指南 | `docs/guides/guide-build-installer.md` |
+| 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` |
 | 历史原件（只读） | `docs/archive/` |
 
 **可信度顺序**：逐字源码 > 动态实测 > 推断 > 拟合（`01_源码\` > 本 README > `04_文档\`）。
@@ -187,8 +188,11 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | 构建中间产物 / `*.exe` / `*.obj` | `02_构建\*` | 可再生；正式产物走 Release 附件 |
 | 含参考实现内部细节的 5 份文档 | `04_文档\01_第三方磨皮真值.md` 等（`.gitignore` §10） | 仅本机查证用 |
 
-> ⚠️ **闸门待补**：`.gitignore` 目前只忽略 `02_构建/build_output/`，**新增的 `build_1.0.0.0/` 与历史 `build_3.1.40/` 不被忽略**，
-> 2026-11-06 靠显式 `git add` 排除。是否补 `02_构建/build_*/` 见 §8 待人工确认项。
+> ✅ **闸门已补（2026-11-06，提交 `e14f3f2`）**：规则已由 `02_构建/build_output/` 改为 `02_构建/build_*/`，
+> 覆盖 `build_output\` / `build_1.0.0.0\` / `build_3.1.40\` 等全部版本化产物目录；带尾斜杠只匹配目录，
+> 不影响 `build_manual.bat` / `build-ui_320.bat` / `build_log.txt` / `verify-ui-imports.py`。
+> 已用 `git check-ignore -v` 与 `check_upload.py`（325 文件四道断言）复核通过。
+> 新产物目录不再需要靠显式 `git add` 规避，但提交前仍应跑 `--staged` 闸门。
 
 第三方组件：ONNX Runtime / YuNet（MIT，随包分发）、OBS Studio libobs（GPL-2.0，宿主，不随仓库分发）、
 `07_开源参考\` 内 MIT 许可原文。GPL-2.0 参考仓库只读思路、未抄代码。完整出处与许可明细见
@@ -210,9 +214,12 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | 2 | CPU `1.0.0.0` 装机脚本 | `03_装机\` 无对应版本脚本；真机装/卸、`e2e_test.ps1` 对新包未跑过回归。 |
 | 3 | 性能与画质数字 | `6.43 / 7.25 / 7.11 / 9.48 ms`、`79.0 / 70.2 分`、`14/14` 均为**历史轴引擎层口径**，未在 CPU `1.0.0.0` 上重测；口径互不通用，勿混用。 |
 | 4 | 已知遗留 | 旧入口记录的「磨皮=0 时锐化滑块无效」「浅色主题未复核」「美白补 6.5%」「祛斑痘/亮眼素材信号在噪声级」均属历史轴，需在当前代码上逐项复核是否仍存在。 |
-| 5 | 旧版 GPU 移植计划 | `04_文档\方案A_GPU移植开发计划.md` 与当前「纯 CPU」方向冲突，待后续批次归档。 |
-| 6 | `.gitignore` 构建产物规则 | 是否补 `02_构建/build_*/`，补后需回归 `check_upload.py`。 |
+| 5 | ~~旧版 GPU 移植计划~~ | ✅ **已关闭（第 2 批）**：`04_文档\方案A_GPU移植开发计划.md` 已归档为 `docs/archive/gpu-porting-plan-20261106.md`，文首标「与纯 CPU 方向冲突、从未开工、不得据此施工」。 |
+| 6 | ~~`.gitignore` 构建产物规则~~ | ✅ **已关闭（提交 `e14f3f2`）**：已补 `02_构建/build_*/` 并回归 `check_upload.py`，详见 §6。 |
 | 7 | 文档维护人 | 统一文档头的「维护人」暂缺，需指定。 |
+
+> 2026-11-06 裁定：评分公式与 `79.0 / 70.2 分` 等历史分数口径**不抽成当前版、不长期保留**；
+> `qtmin.bat` / `build/qtmin.cpp` 全库检索无结果，不再列为待确认项。两者若需查证，只读历史原件见 `docs/archive/`。
 
 ---
 
@@ -226,6 +233,11 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `04_文档/CHANGELOG_提交记录.md` | 2532 行流水账整体归档；里程碑提炼进 `docs/CHANGELOG.md` |
 | `06_安装包/README_打包说明.md` | 按 CPU `1.0.0.0` 重写为 `docs/guides/guide-build-installer.md` |
 | `04_文档/C1_CPU性能优化.md` | 补元数据、纠正过时路径，改为 `docs/design/design-cpu-performance.md` |
+| `04_文档/顶层菜单插件说明.md` | **已合并自**（2026-11-06，第 2 批）：改写为 `docs/guides/guide-ui.md`；保留机制 / 三个坑 / 目录名坑，按 CPU 宏分列菜单与角标口径，删除已失效的「底层 SDK 全局状态」限制 |
+| `04_文档/方案A_GPU移植开发计划.md` | 第 2 批归档 `docs/archive/gpu-porting-plan-20261106.md`（与纯 CPU 方向冲突、从未开工） |
+| `04_文档/面板使用说明.md` | 第 2 批归档 `docs/archive/ui-html-websocket-proposal-20261106.md`（未采用的 HTML+websocket 方案，引用脚本与路径全部不存在） |
+| `04_文档/方案边界调整_开源可商用.md` | 第 2 批归档 `docs/archive/opensource-boundary-20261106.md`（§4「CPU 不能实时」结论已被实测推翻；许可判据 / 选型表 / 体积对比待第 3 批合并） |
+| `04_文档/验收报告_v3.1.34.md`、`复刻评分_v3.1.39.md` | 第 2 批归档 `docs/archive/acceptance-quality-20261106.md`、`scorecard-20261106.md`（历史轴数字，CPU `1.0.0.0` 未重测） |
 
 ---
 

@@ -6,7 +6,7 @@
 | 最后更新 | 2026-11-06 |
 | 适用代码版本 | CPU 线 `1.0.0.0`（提交 `5323856`） |
 | 维护人 | 待人工确认 |
-| 状态 | `Active`（**首批登记，尚未覆盖全库**） |
+| 状态 | `Active`（**第 2 批已登记，§3 仍有 24 篇未治理**） |
 | 替代文档 | 无（新建） |
 
 > **本表是全库文档体系的唯一入口。** 查「哪篇是现状」先看 §1；查历史原件看 §2；
@@ -36,7 +36,8 @@
 | 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/changelog-raw-20261106.md` |
 | CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（数字待重测） | CPU `1.0.0.0`；文内数字测于历史轴 `3.1.x` | 待人工确认 | 2026-11-06 | 原 `04_文档\C1_CPU性能优化.md` |
 | 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md` |
-| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（首批） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 无 |
+| 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` | guides | `Active`（装机状态待人工确认） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 原 `04_文档\顶层菜单插件说明.md`；未采用的 HTML+websocket 方案见 `docs/archive/ui-html-websocket-proposal-20261106.md` |
+| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（第 2 批） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 无 |
 
 **预留空类**：`docs/reference/`（暂无当前版）、`docs/adr/`（暂无一事一篇的决策记录）。
 两目录以 `.gitkeep` 占位，写入正式文档时删占位即可。
@@ -52,28 +53,40 @@
 | 工程 / UI 12 项验收（3.1.39） | `docs/archive/acceptance-engineering-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.39 / core 1.4.0` | 待人工确认 | 2026-11-06 | 见 `docs/CHANGELOG.md` |
 | 安装包装/卸 40 项验收（3.1.39） | `docs/archive/acceptance-installer-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.39` | 待人工确认 | 2026-11-06 | 见 `docs/guides/guide-build-installer.md` |
 | 逐提交流水账（2532 行全文保全） | `docs/archive/changelog-raw-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `docs/CHANGELOG.md` |
+| GPU 移植开发计划（与纯 CPU 方向冲突） | `docs/archive/gpu-porting-plan-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.39 / core 1.4.0` | 待人工确认 | 2026-11-06 | 见 `README.md` §0、§1、§3；该计划从未开工 |
+| 未采用的 HTML + obs-websocket 面板方案 | `docs/archive/ui-html-websocket-proposal-20261106.md` | archive | `Deprecated` | 历史轴（第三方 SDK 对接时期） | 待人工确认 | 2026-11-06 | 见 `docs/guides/guide-ui.md`；引用脚本与路径全部不存在 |
+| 开源可商用方案边界（含被推翻结论） | `docs/archive/opensource-boundary-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §6；许可判据 / 选型表 / 体积对比差异点待第 3 批并入 `docs/reference/reference-licensing.md` |
+| 工程 / 画质 11 项验收（3.1.34） | `docs/archive/acceptance-quality-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.34 / core 1.4.0` | 待人工确认 | 2026-11-06 | 见 `docs/CHANGELOG.md`、`README.md` §8 第 3 项（数字待重测） |
+| 复刻评分（3.1.39，79.0 / 70.2 分） | `docs/archive/scorecard-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.39 / core 1.4.0` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；历史分数口径**不另立当前版**，原件只读保全 |
 
 > 归档件的**正文一字未改**，仅在文首追加废弃标注块。历史评分口径、版本演进史、20 条雷区、许可明细出处均可在此查证。
+> 第 2 批新增 5 篇中，仅 `opensource-boundary` 带一组**待第 3 批合并的许可差异点**；
+> `scorecard` 的评分公式与历史分数口径经 2026-11-06 裁定**不抽成当前版、不长期保留**。
 
 ---
 
 ## 3. 待治理登记（Pending · 分批推进）
 
-`04_文档\` 下仍有 **35 篇** `.md` 尚未逐篇诊断与归并，全部为历史轴 `3.1.x` 口径，
-**不得当作当前结论**。按主题粗分如下，**每组的基底与合并差异点待逐批列清单确认后再动**：
+第 2 批已处理 6 篇：`方案A_GPU移植开发计划.md`、`面板使用说明.md`、`方案边界调整_开源可商用.md`、
+`验收报告_v3.1.34.md`、`复刻评分_v3.1.39.md` → `docs/archive/`（5 篇 `Deprecated`）；
+`顶层菜单插件说明.md` → `docs/guides/guide-ui.md`（1 篇 `Active`）。
 
-| 组 | 代表文件（篇数） | 初步方向 | 状态 |
+`04_文档\` 现剩 **29 篇** `.md` = **24 篇 tracked（待治理）** + **5 篇 `.gitignore` §10 排除（不纳入治理）**。
+tracked 部分全部为历史轴 `3.1.x / core 1.4.x` 口径，**不得当作当前结论**。
+每组的基底与合并差异点仍须**逐批列清单确认后再动**：
+
+| 组 | 代表文件（篇数） | 初步方向 | 状态 / 批次 |
 |---|---|---|---|
-| 磨皮 / 画质技术细节 C 系列 | `C2`~`C12`、`C14`~`C21`（约 20 篇） | 按模块择基底合并为 `docs/design/` 当前版；其余归档 | `Pending` |
-| 对拍结论 S / D 系列 | `S1`~`S3`、`D1`（4 篇） | 结论类合并为 `docs/reference/` 或 `design/` 一份 | `Pending` |
-| 验收 / 评分 | `验收报告_v3.1.34.md`、`复刻评分_v3.1.39.md`（2 篇） | 历史版本记录 → 归档；评分口径抽成 reference 当前版（数字待重测） | `Pending` |
-| 合规 / 开源溯源 | `开源参考仓库_对照与可复用清单.md`、`方案边界调整_开源可商用.md`（2 篇） | 合并为 `docs/reference/reference-licensing.md`，核对许可口径冲突 | `Pending` |
-| 使用指南 | `面板使用说明.md`、`顶层菜单插件说明.md`（2 篇） | 按 CPU UI 实际行为重写为 `docs/guides/guide-ui.md` | `Pending` |
-| **与当前方向冲突** | `方案A_GPU移植开发计划.md`（1 篇） | **必须归档**：与「纯 CPU、不依赖 GPU」直接冲突，主目录不保留 | `Pending`（高优先） |
-| 旧入口 | `一级入口说明.md`（1 篇） | 归档，仅保留菜单链路差异点 | `Pending` |
-| 仅本机保留 | 其余 `04_文档\` 下被 `.gitignore` §10 排除的文档 | 见 §4，**不纳入治理** | `Excluded` |
+| 磨皮 / 画质技术细节 C 系列 | `C2`~`C12`、`C14`~`C21`（**19 篇**） | 按模块择基底归并为 `docs/design/design-*.md` 4~5 份，其余归档；**必须保留 `C7` / `C8` / `C17` 的证伪类结论**，并标「历史轴实测，CPU `1.0.0.0` 未复核」 | `Pending` · 第 4 批 |
+| 对拍结论 S / D 系列 | `S1`~`S3`、`D1`（**4 篇**） | 结论类合并为 `docs/reference/` 或 `design/` 一份；D1 技术线路单独判读 | `Pending` · 第 3 批 |
+| 合规 / 开源溯源 | `开源参考仓库_对照与可复用清单.md`（**1 篇**） | 与 `opensource-boundary` 归档件的许可判据 / 选型表 / 体积对比差异点合并为 `docs/reference/reference-licensing.md`；核对许可口径冲突 | `Pending` · 第 3 批 |
+| 仅本机保留 | `04_文档\` 下被 `.gitignore` §10 排除的 **5 篇**，文件名见 §4 | 不移动、不登记、不入库 | `Excluded` |
 
-> 与 2026-11-06 诊断的「82 篇自研文档 / 8 个真实主题组」口径一致；本表只登记首批已落地项与剩余分组，
+> **归类修正（2026-11-06）**：首批曾把 `一级入口说明.md` 误列为「旧入口 / `Pending`」。
+> 核查 `.gitignore:184` 后确认它属于 §4 的 `Excluded`（含参考实现内部细节，仅本机查证），
+> **不纳入治理、不归档、不移动**；原「归档并保留菜单链路差异点」的初步方向作废。
+
+> 与 2026-11-06 诊断的「82 篇自研文档 / 8 个真实主题组」口径一致；本表只登记已落地项与剩余分组，
 > 逐篇清单仍以当时输出的全量表为准。
 
 ---
@@ -82,7 +95,9 @@
 
 以下内容**不移动、不登记、不入库**，`docs/` 体系对它们不成立：
 
-- `.gitignore` §10 排除的 `04_文档\` 下 5 篇含参考实现内部细节的文档（含 `C13_装机链路.md`、`C23_磨皮照抄施工图.md` 等）与 `参考文件\README.md`——仅本机查证用。
+- `.gitignore` §10 排除的 `04_文档\` 下 **5 篇**含参考实现内部细节的文档（`.gitignore:182–186`）：
+  `01_第三方磨皮真值.md`、`C13_装机链路.md`、`C23_磨皮照抄施工图.md`、`一级入口说明.md`、`美颜子功能开发指南.md`；
+  以及 `参考文件\README.md`——仅本机查证用，**不移动、不归档、不登记为 `Pending`**。
 - `参考文件\` 全部子目录：闭源商业 SDK、参考分析、原始 `.raw` 帧数据、OBS 源码树（无再分发权 / 含真人面部数据）。
 - `05_验证\` 下的真人面部位图、`.raw` 帧、加密 bundle、构建产物与可再生日志。
 - `.gitignore` 是**唯一排除闸门**；新增文件默认会被上传，先加规则再 `git add`。提交前跑 `python 05_验证\check_upload.py --staged`。
@@ -107,6 +122,7 @@
 | 日期 | 变更 |
 |---|---|
 | 2026-11-06 | 建立 `docs/` 目录与 `docs/INDEX.md`；首批登记 5 篇 `Active`、5 篇 `Deprecated`；`04_文档\` 余 35 篇标 `Pending`；法务排除项标 `Excluded` |
+| 2026-11-06 | 第 2 批：登记新增 1 篇 `Active`（`docs/guides/guide-ui.md`）、5 篇 `Deprecated`；`04_文档\` 35 → 29 篇（24 tracked + 5 Excluded）；修正 `一级入口说明.md` 的 `Pending` → `Excluded` 误归类；登记第 3 / 4 批方向与待合并差异点 |
 
 ---
 

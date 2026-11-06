@@ -1,3 +1,12 @@
+> **ARCHIVED · 已废弃，见 `docs/guides/guide-ui.md`**
+> 归档日期：2026-11-06 · 状态：`Deprecated` · 适用代码版本：历史轴（第三方 SDK 对接时期，**非当前 CPU `1.0.0.0`**）
+> 废弃原因：本文描述的是「方案 A：纯 HTML 面板 + obs-websocket + 自定义浏览器停靠窗口」，**该方案未采用**。2026-11-06 核查：文中引用的 `index.html`、`install_dock.py`、`install_dock.bat`、`serve_panel.py` 及外部绝对路径**全部不存在**，全库源码无 websocket 实现痕迹，按本文操作得不到正确结果，属无效/误导文档。
+> 当前实现是 `obs-beauty-ui.dll`：Qt 顶层菜单 + 遍历滤镜 `obs_properties` 动态建控件，见 `docs/guides/guide-ui.md`。
+> 本文为历史原件，正文未改写、未删减，**不得据此施工**。
+> 维护人：待人工确认 · 最后核对：2026-11-06
+
+---
+
 # OBS 美颜面板（方案 A）
 
 把自制美颜滤镜的操作入口提到 OBS 主窗口的**一级停靠面板**，与「场景 / 来源 / 混音器」并列。
