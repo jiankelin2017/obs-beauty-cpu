@@ -37,7 +37,11 @@ for /d %%d in ("%ROOT%\*") do for /d %%e in ("%%d\*") do if exist "%%e\obs-studi
 rem --- locate the offline-verify dir: the one holding deps\runtime\include -
 for /d %%d in ("%ROOT%\05_*") do if exist "%%d\deps\runtime\include" set OFFDIR=%%d
 
+rem CPU 1.0.0.0 builds set BEAUTY_OUTDIR to a separate folder so the
+rem frozen 3.1.40 DLLs in build_output are never overwritten.
+rem With BEAUTY_OUTDIR unset this behaves exactly as before.
 set OUT=%HERE%build_output
+if defined BEAUTY_OUTDIR set OUT=%BEAUTY_OUTDIR%
 if not exist "%OUT%" mkdir "%OUT%"
 
 if not defined SRC (

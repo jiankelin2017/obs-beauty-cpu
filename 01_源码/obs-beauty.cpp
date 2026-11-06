@@ -882,7 +882,7 @@ static void obs_module_unload(void)
 MODULE_EXPORT const char *obs_module_description(void);
 const char *obs_module_description(void)
 {
-	return "OBS美颜滤镜 (OBS Beauty, standalone core) v" PLUGIN_VERSION;
+	return "OBS美颜滤镜 CPU 版 (OBS Beauty, standalone core) v" PLUGIN_VERSION;
 }
 
 bool obs_module_load(void)
@@ -903,7 +903,7 @@ bool obs_module_load(void)
 		// 刻意用字符串拼接而不是 printf 格式化：这一行有 6 个值要打，是全文件最
 		// 容易被改的一行，而 blog() 不受编译器格式检查保护（见文件头的警告）。
 		// 3.1.4 就是在这里多加了一个 %s 少配一个参数，把 OBS 崩了两次。
-		std::string msg = "init OK (v";
+		std::string msg = "init OK (CPU v";
 		msg += PLUGIN_VERSION;
 		msg += ", engine=";
 		msg += e.id() ? e.id() : "?";

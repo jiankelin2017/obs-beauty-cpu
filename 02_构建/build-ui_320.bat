@@ -53,13 +53,18 @@ set PATH=%VSBASE%\bin\Hostx64\x64;%QT%\bin;%PATH%
 set INCLUDE=%VSBASE%\include;%SDKBASE%\Include\%SDKVER%\ucrt;%SDKBASE%\Include\%SDKVER%\um;%SDKBASE%\Include\%SDKVER%\shared;%SDKBASE%\Include\%SDKVER%\winrt
 set LIB=%VSBASE%\lib\x64;%SDKBASE%\Lib\%SDKVER%\ucrt\x64;%SDKBASE%\Lib\%SDKVER%\um\x64
 
+rem CPU 1.0.0.0 builds set BEAUTY_OUTDIR to a separate folder so the
+rem frozen 3.1.40 DLLs in build_output are never overwritten.
+rem With BEAUTY_OUTDIR unset this behaves exactly as before.
 set OUT=%HERE%build_output
+if defined BEAUTY_OUTDIR set OUT=%BEAUTY_OUTDIR%
 if not exist "%OUT%" mkdir "%OUT%"
 
 echo [build-ui] src=%SRC%
 echo [build-ui] dep=%DEP%
 
 cl /nologo /LD /O2 /EHsc /std:c++17 /Zc:__cplusplus /permissive- /W3 /utf-8 ^
+   /DBEAUTY_UI_CPU_EDITION=1 ^
    /I "%DEP%\obs-studio-32.1.1\libobs" ^
    /I "%QT%\include" /I "%QT%\include\QtCore" /I "%QT%\include\QtGui" /I "%QT%\include\QtWidgets" ^
    /Fo"%OUT%\\" /Fe"%OUT%\obs-beauty-ui.dll" ^

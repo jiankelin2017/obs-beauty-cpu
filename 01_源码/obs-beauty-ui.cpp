@@ -185,7 +185,15 @@ OBS_DECLARE_MODULE()
 //   ② 记住上次绑定的 (源, 滤镜)，实例失效后在窗口激活时自动重新枚举并重连；
 //   ③ 滑块回调里只做「轻量重连」——绝不调用 build_form()，否则正在按着的控件会被
 //      deleteLater 掉（见 sync_now 的 mouseButtons 判据，历史上为此崩过）。
-#define BEAUTY_UI_VERSION "3.1.40"
+/* ---- CPU 版显式标识（2026-11-06 立轴）--------------------------------
+ * 只有 CPU 版构建脚本定义 BEAUTY_UI_CPU_EDITION=1。默认 0 —— GPU 版共用
+ * 同一份 UI 源码时不定义该宏，窗口标题 / 菜单 / 角标 / 关于全部保持原样，
+ * 因此本改动不会污染 GPU 版，也不会改变它正在使用的 dll 行为。 */
+#ifndef BEAUTY_UI_CPU_EDITION
+#define BEAUTY_UI_CPU_EDITION 0
+#endif
+
+#define BEAUTY_UI_VERSION "1.0.0.0"   /* CPU 四段轴，口径见 beauty_params.h */
 
 /* ---- 前端 API：OBS 安装包不带 obs-frontend-api.h，按 ABI 直接声明 ---- */
 extern "C" {
@@ -196,7 +204,11 @@ void *obs_frontend_get_main_window(void);
  * 老场景里已挂好的滤镜存的是旧 id，面板必须两个都认，否则会找不到实例。 */
 #define BEAUTY_FILTER_ID        "obs_beauty_filter"
 #define BEAUTY_FILTER_ID_LEGACY "legacy_beauty_filter"
+#if BEAUTY_UI_CPU_EDITION
+#define BEAUTY_MENU_TITLE "\xe7\xbe\x8e\xe9\xa2\x9c" "\xc2\xb7" "CPU(&A)" /* 美颜·CPU(&A) */
+#else
 #define BEAUTY_MENU_TITLE "\xe7\xbe\x8e\xe9\xa2\x9c(&A)" /* 美颜(&A) */
+#endif
 
 static inline bool is_beauty_filter_id(const char *id)
 {
@@ -254,7 +266,11 @@ class BeautyPanel : public QDialog {
 public:
 	explicit BeautyPanel(QWidget *parent) : QDialog(parent)
 	{
+#if BEAUTY_UI_CPU_EDITION
+		setWindowTitle(QString::fromUtf8("OBS美颜 · CPU 版 v" BEAUTY_UI_VERSION));
+#else
 		setWindowTitle(QString::fromUtf8("OBS美颜参数面板"));
+#endif
 		/* 3.0.18：以前写死 resize(460, 620)，但表单有 22 行、每行约 52 逻辑 px，
 		 * 实际高度被布局撑到 1150 px 以上 —— 1080p 屏在 150% 缩放下可用高度
 		 * 只有约 680 px，一屏只露出 1/3 内容。现在改成：
@@ -310,6 +326,11 @@ public:
 			"QTabBar::tab:hover:!selected{background:rgba(128,128,128,72);}"
 			"QLabel#beautyTitle{font-size:18px;font-weight:bold;}"
 			"QLabel#beautyHint{color:#8a8a8a;font-size:12px;}"
+#if BEAUTY_UI_CPU_EDITION
+			"QLabel#beautyCpuTag{color:#185FA5;background:#E6F1FB;"
+			"border:1px solid #85B7EB;border-radius:4px;padding:1px 6px;"
+			"font-size:12px;font-weight:bold;}"
+#endif
 			/* ★ 统一尺寸的唯一出处：四类可交互控件同高、零外边距 */
 			"QComboBox,QPushButton,QDoubleSpinBox,QSpinBox,QLineEdit{"
 			"font-size:14px;"
@@ -338,6 +359,11 @@ public:
 		auto *top = new QHBoxLayout();
 		top_row_ = top;
 		top->setSpacing(6);
+#if BEAUTY_UI_CPU_EDITION
+		auto *cpuTag = new QLabel(QString::fromUtf8("CPU 版"), this);
+		cpuTag->setObjectName("beautyCpuTag");
+		top->addWidget(cpuTag);
+#endif
 		top->addWidget(new QLabel(QString::fromUtf8("作用对象")));
 		combo_ = new QComboBox();
 		/* 长源名不要撑爆窗口宽度：给个下限，超出部分由下拉自己省略 */
@@ -399,8 +425,13 @@ public:
 		 * 注意：sw_row_ 每次 build_form 都会被 purge_layout 清空，
 		 * 所以 clear_form() 里要先 removeWidget(ver_) 保住它，
 		 * 再由 build_form 末尾重新挂回去（见那两处注释）。 */
+#if BEAUTY_UI_CPU_EDITION
+		ver_ = new QLabel(QString::fromUtf8("CPU v" BEAUTY_UI_VERSION), this);
+		ver_->setObjectName("beautyCpuTag");
+#else
 		ver_ = new QLabel(QString::fromUtf8("v" BEAUTY_UI_VERSION), this);
 		ver_->setObjectName("beautyHint");
+#endif
 		ver_->setToolTip(QString::fromUtf8(
 			"选中滤镜实例后实时显示滤镜版本（面板与滤镜版本同号，不符即为装错"));
 		ver_->setTextInteractionFlags(Qt::NoTextInteraction);
@@ -1071,6 +1102,11 @@ private:
 		if (!ver_)
 			return;
 		const QString panel = QString::fromUtf8(BEAUTY_UI_VERSION);
+#if BEAUTY_UI_CPU_EDITION
+		const QString prefix = QString::fromUtf8("CPU v");
+#else
+		const QString prefix = QString::fromUtf8("v");
+#endif
 		QString fv; /* 滤镜 proc 报上来的裸版本号（可能为空 = 老滤镜） */
 		if (filter_) {
 			if (proc_handler_t *ph = obs_source_get_proc_handler(filter_)) {
@@ -1085,11 +1121,11 @@ private:
 		}
 		QString text;
 		if (fv.isEmpty())
-			text = QString::fromUtf8("v") + panel;      /* 兜底宏 */
+			text = prefix + panel;                     /* 兜底宏 */
 		else if (fv == panel)
-			text = QString::fromUtf8("v") + fv;         /* 同号：干净显示 */
+			text = prefix + fv;                        /* 同号：干净显示 */
 		else
-			text = QString::fromUtf8("v") + fv +
+			text = prefix + fv +
 			       QString::fromUtf8("（面板 %1）").arg(panel);
 		ver_->setText(text);
 	}
@@ -1784,6 +1820,10 @@ static void ensure_menu(void)
 		QMessageBox::information(
 			mw, QString::fromUtf8("关于"),
 			QString::fromUtf8("OBS美颜 参数面板 v" BEAUTY_UI_VERSION "\n\n"
+#if BEAUTY_UI_CPU_EDITION
+					  "CPU 版：纯 CPU 实现，不依赖 GPU / D3D。\n"
+					  "版本轴 1.0.0.0（四段式）与 GPU 版 3.0.1 独立，不可互比。\n\n"
+#endif
 					  "把「OBS美颜」滤镜的参数面板挂到 OBS 顶层菜单。\n"
 					  "面板内容由滤镜自身的属性定义自动生成，\n"
 					  "与滤镜属性页共用同一份设置，改哪边都即时生效。\n\n"
@@ -1829,7 +1869,11 @@ bool obs_module_load(void)
 	g_timer->setInterval(250);
 	QObject::connect(g_timer, &QTimer::timeout, []() { ensure_menu(); });
 	g_timer->start();
+#if BEAUTY_UI_CPU_EDITION
+	blog(LOG_INFO, "[obs-beauty-ui][CPU] 模块已加载 v%s，等待主窗口就绪", BEAUTY_UI_VERSION);
+#else
 	blog(LOG_INFO, "[obs-beauty-ui] 模块已加载 v%s，等待主窗口就绪", BEAUTY_UI_VERSION);
+#endif
 	return true;
 }
 

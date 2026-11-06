@@ -982,7 +982,8 @@ public:
     const char* id() const override { return "core"; }
     // 1.4.0 → 1.4.1（3.1.40）：无脸帧改走逐字节透传，不再全帧兜底磨皮。
     // 门控语义变了 ⇒ 无脸帧的画面输出与 1.4.0 不同，旧的对拍数字不覆盖这条路径。
-    const char* version() const override { return "1.4.1"; }
+    // 引擎版本并入 CPU 单轴（1.0.0.0），不再维护独立的 core 1.4.x 号。
+    const char* version() const override { return "1.0.0.0"; }
 
     bool ensureReady(std::string& err) override {
         // 人脸检测模型只试一次。失败不阻止引擎就绪 —— 降级为「无掩码，全帧磨皮」，

@@ -1,11 +1,14 @@
 ﻿; ============================================================================
-;  OBS美颜 安装包  v3.1.39  (NSIS 3 / Unicode)
+;  OBS美颜 CPU 版 安装包  v1.0.0.0  (NSIS 3 / Unicode)
 ;
 ;  装什么（4 个文件 + 文档 + 卸载器）：
-;    obs-beauty.dll      = 滤镜本体（3.1.39）
+;    obs-beauty.dll      = 滤镜本体（CPU 版 1.0.0.0）
 ;    onnxruntime.dll     = 自研引擎运行时（必须与滤镜 DLL 同目录）
 ;    models\yunet.onnx   = 人脸检测模型（必须落在 models\ 子目录）
 ;    obs-beauty-ui.dll   = 参数面板（ProgramData 下的插件目录）
+;
+;  版本轴：CPU 线 1.0.0.0（四段式，见 01_源码\beauty_params.h），
+;  与 GPU 版 3.0.1 独立，不可互比。引擎 core 已并入这条单轴。
 ;
 ;  为什么这几个位置不能改（见 04_文档\C13_装机链路.md §2）：
 ;    beauty_core.cpp 的 ensureReady() 用 selfDir()（= obs-beauty.dll 所在目录）
@@ -13,7 +16,7 @@
 ;    滤镜仍能加载，但人脸检测静默失效 → 磨皮退化成全帧。
 ;
 ;  不含 NamaSDK（约 97 MB 闭源件）：3.1.7 起默认引擎已切到 core，
-;  本机实测无 SDK 目录也能正常 init（engine=core/1.4.0, region=on）。
+;  本机实测无 SDK 目录也能正常 init（engine=core/1.0.0.0, region=on）。
 ;  机器上本来就有 obs-beauty\ SDK 目录的，本包一律不动。
 ;
 ;  卸载三条硬规则（"装之前什么样，卸完还是什么样"）：
@@ -41,22 +44,24 @@ SetDatablockOptimize on
 
 !define APPNAME      "OBS美颜"
 !define APPNAME_EN   "OBS Beauty"
+!define EDITION      "CPU 版"
 ; 沿用旧包的 APPID：老版本（3.0.20 / 3.1.2）装过的话算升级，不会在
 ; 「程序和功能」里留下两条重复项。
 !define APPID        "OBSBeauty.NamaBeauty"
 ; 版本号由 build_setup.ps1 用 /D 传进来 —— 只在一处维护。
+; CPU 线用四段式 1.0.0.0；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
 ; 手工编译（直接跑 makensis）时用下面这几个兜底值。
 !ifndef PKGVER
-  !define PKGVER     "3.1.39"
+  !define PKGVER     "1.0.0.0"
 !endif
 !ifndef FILTERVER
-  !define FILTERVER  "3.1.39"
+  !define FILTERVER  "1.0.0.0"
 !endif
 !ifndef PANELVER
-  !define PANELVER   "3.1.39"
+  !define PANELVER   "1.0.0.0"
 !endif
 !ifndef COREVER
-  !define COREVER    "1.4.0"
+  !define COREVER    "1.0.0.0"
 !endif
 !define PUBLISHER    "OBS Beauty (personal build)"
 !define ESTSIZE      12250            ; KB，控制面板里显示的大小（4 个文件约 12.2 MB）
@@ -66,7 +71,7 @@ SetDatablockOptimize on
   !define SRCDIR "C:\_obspkg_src"
 !endif
 !ifndef OUTFILE
-  !define OUTFILE "OBS美颜_Setup_v${PKGVER}.exe"
+  !define OUTFILE "OBS美颜_CPU_v${PKGVER}.exe"
 !endif
 
 ; ------------------------------------------------- 编译期源文件自检
@@ -100,20 +105,21 @@ Var OBSDIR       ; <OBS>\obs-plugins\64bit
 Var PDIR         ; ProgramData
 Var UIDIR        ; <ProgramData>\obs-studio\plugins\obs-beauty-ui\bin\64bit
 
-Name "${APPNAME} ${PKGVER}"
-Caption "${APPNAME} ${PKGVER} 安装程序"
+Name "${APPNAME} ${EDITION} ${PKGVER}"
+Caption "${APPNAME} ${EDITION} ${PKGVER} 安装程序"
 OutFile "${OUTFILE}"
 InstallDir "$PROGRAMFILES64\obs-beauty"
 RequestExecutionLevel admin
 ShowInstDetails show
 ShowUninstDetails show
-BrandingText "${APPNAME} ${PKGVER}  ·  滤镜 ${FILTERVER} + 面板 ${PANELVER} + 引擎 ${COREVER}"
+BrandingText "${APPNAME} ${EDITION} ${PKGVER}  ·  滤镜 ${FILTERVER} + 面板 ${PANELVER} + 引擎 ${COREVER}"
 
-VIProductVersion "${PKGVER}.0"
-VIAddVersionKey /LANG=2052 "ProductName"     "${APPNAME}"
+; PKGVER 已是四段式 1.0.0.0，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
+VIProductVersion "${PKGVER}"
+VIAddVersionKey /LANG=2052 "ProductName"     "${APPNAME} ${EDITION}"
 VIAddVersionKey /LANG=2052 "ProductVersion"  "${PKGVER}"
-VIAddVersionKey /LANG=2052 "FileDescription" "${APPNAME} 安装程序（OBS Studio 美颜滤镜 + 参数面板）"
-VIAddVersionKey /LANG=2052 "FileVersion"     "${PKGVER}.0"
+VIAddVersionKey /LANG=2052 "FileDescription" "${APPNAME} ${EDITION} 安装程序（纯 CPU，不依赖 GPU）"
+VIAddVersionKey /LANG=2052 "FileVersion"     "${PKGVER}"
 VIAddVersionKey /LANG=2052 "CompanyName"     "${PUBLISHER}"
 VIAddVersionKey /LANG=2052 "LegalCopyright"  "仅供自用；第三方组件版权归各自原作者"
 
@@ -293,7 +299,7 @@ Section "说明文档与卸载程序" SecDocs
   WriteRegStr HKLM "${REGKEY}" "PDir"           "$PDIR"
 
   ; ---- 控制面板「程序和功能」--------------------------------------------
-  WriteRegStr HKLM "${UNINSTKEY}" "DisplayName"     "${APPNAME} ${PKGVER}（OBS 滤镜 + 参数面板）"
+  WriteRegStr HKLM "${UNINSTKEY}" "DisplayName"     "${APPNAME} ${EDITION} ${PKGVER}（纯 CPU 滤镜 + 参数面板）"
   WriteRegStr HKLM "${UNINSTKEY}" "DisplayVersion"  "${PKGVER}"
   WriteRegStr HKLM "${UNINSTKEY}" "DisplayIcon"     "$INSTDIR\Uninstall_${APPNAME}.exe"
   WriteRegStr HKLM "${UNINSTKEY}" "Publisher"       "${PUBLISHER}"

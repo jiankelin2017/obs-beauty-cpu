@@ -9,7 +9,7 @@ $T        = Join-Path $env:TEMP 'obsbeauty_test'
 $Log      = Join-Path $T 'log.txt'
 $Safety   = Join-Path $T 'safety'
 $Done     = Join-Path $T 'done.flag'
-$Setup    = Join-Path $PSScriptRoot 'OBS美颜_Setup_v3.1.39.exe'
+$Setup    = Join-Path $PSScriptRoot 'OBS美颜_CPU_v1.0.0.0.exe'
 
 $OBSDIR   = 'C:\Program Files\obs-studio\obs-plugins\64bit'
 $FILTER   = Join-Path $OBSDIR 'obs-beauty.dll'

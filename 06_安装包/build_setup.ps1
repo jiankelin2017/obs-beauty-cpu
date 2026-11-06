@@ -2,12 +2,13 @@
 #  build_setup.ps1 - 打包 "OBS美颜" 安装包 (NSIS 3)
 #
 #  做什么：
-#    1) 从 02_构建\build_output 取滤镜/面板 DLL，从 05_验证 取 ONNX Runtime + YuNet
+#    1) 从 02_构建\build_1.0.0.0 取滤镜/面板 DLL（CPU 线独立产物目录），
+#       从 05_验证 取 ONNX Runtime + YuNet
 #    2) 校验版本串（防止把旧构建打进包里 —— C13 坑 #1）
 #    3) 暂存到纯 ASCII 目录（NSIS 遇到中文源路径会报 no files found）
 #    4) 生成 README.txt / md5.txt
 #    5) 确保 obs-beauty.nsi 是 UTF-8 with BOM（否则中文界面乱码）
-#    6) 调 makensis 编译，产物落到 06_安装包\OBS美颜_Setup_v<版本>.exe
+#    6) 调 makensis 编译，产物落到 06_安装包\OBS美颜_CPU_v<版本>.exe
 #
 #  用法：
 #    powershell -ExecutionPolicy Bypass -File build_setup.ps1
@@ -23,14 +24,19 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root      = Split-Path -Parent $ScriptDir
-$BuildOut  = Join-Path $Root '02_构建\build_output'
+# CPU 1.0.0.0 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
+# 绝不读 build_output（那里是 3.1.40，版本串自检会拦住但不必依赖它）。
+# 需要临时指向别处（例如验证构建）时设环境变量 BEAUTY_BUILD_OUT。
+$BuildOut  = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root '02_构建\build_1.0.0.0' }
 $Nsi       = Join-Path $ScriptDir 'obs-beauty.nsi'
 $Makensis  = 'C:\Program Files (x86)\NSIS\makensis.exe'
 
-$Ver = '3.1.39'
-$FilterVer = '3.1.39'
-$PanelVer  = '3.1.39'
-$CoreVer   = '1.4.0'
+# CPU 四段版本轴（唯一口径见 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR）。
+# GPU 版是另一条独立轴（3.0.1，三段式），两条轴不可互比。
+$Ver = '1.0.0.0'
+$FilterVer = '1.0.0.0'
+$PanelVer  = '1.0.0.0'
+$CoreVer   = '1.0.0.0'
 
 function Fail($msg) { Write-Host "[build] ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Info($msg) { Write-Host "[build] $msg" }
@@ -69,10 +75,10 @@ function Assert-ContainsBytes([string]$path, [string]$needle) {
         Fail "$([System.IO.Path]::GetFileName($path)) does not contain '$needle' - it is a stale build"
     }
 }
-Assert-ContainsBytes $Src.filter '3.1.39'
-Assert-ContainsBytes $Src.panel  '3.1.39'
+Assert-ContainsBytes $Src.filter '1.0.0.0'
+Assert-ContainsBytes $Src.panel  '1.0.0.0'
 Assert-ContainsBytes $Src.filter 'obs_beauty_filter'
-Info 'version strings OK (3.1.39 / obs_beauty_filter)'
+Info 'version strings OK (CPU 1.0.0.0 / obs_beauty_filter)'
 
 # ---------------------------------------------------------------- 暂存目录
 $Stage = Join-Path $env:TEMP 'obsbeauty_pkg'
@@ -233,8 +239,8 @@ if ($nsiBytes.Length -lt 3 -or $nsiBytes[0] -ne 0xEF -or $nsiBytes[1] -ne 0xBB -
 # ---------------------------------------------------------------- 编译
 # 注意：/DOUTFILE 里不能出现中文 —— makensis 按控制台代码页解析命令行，
 # 中文名会被写成乱码文件名。这里先出 ASCII 名，编译完再重命名。
-$outName = "OBS美颜_Setup_v$Ver.exe"
-$outExe  = Join-Path $Stage "out\OBSBeauty_Setup_v$Ver.exe"
+$outName = "OBS美颜_CPU_v$Ver.exe"
+$outExe  = Join-Path $Stage "out\OBSBeauty_CPU_Setup_v$Ver.exe"
 
 Info "compiling with $Makensis ..."
 # 版本号只在本脚本顶部维护，/D 传给 nsi（nsi 里的同名 define 只在手工编译时兜底）
