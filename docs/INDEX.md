@@ -6,11 +6,11 @@
 | 最后更新 | 2026-11-06 |
 | 适用代码版本 | CPU 线 `1.0.0.0`（提交 `5323856`） |
 | 维护人 | 待人工确认 |
-| 状态 | `Active`（**第 3 批已登记，§3 仍有 19 篇未治理**） |
+| 状态 | `Active`（**第 4 批已完成；`04_文档/` tracked 待治理清零**） |
 | 替代文档 | 无（新建） |
 
-> **本表是全库文档体系的唯一入口。** 查「哪篇是现状」先看 §1；查历史原件看 §2；
-> §3 明确列出仍未治理的部分，**不要误以为全库已治理完成**。
+> **本表是全库文档体系的唯一入口。** 查「哪篇是现状」看 §1；查历史原件看 §2；
+> §3 记录分批治理结果；§4 是法务 / 隐私红线，**不属于待治理项**。
 
 ---
 
@@ -25,6 +25,7 @@
 | 文档头 | 版本 · 最后更新 · 适用代码版本 · 维护人 · 状态（`Active` / `Deprecated`）· 替代文档 |
 | 可信度 | 逐字源码 > 动态实测 > 推断 > 拟合 |
 | 归档件 | 文首必须标「已废弃，见 xxx」+ 废弃原因；正文不改写、不删减；**不得据此施工** |
+| 当前版数字 | 第 4 批起只保留结论 / 开关 / 坑 / 证伪 / 失效说明；**历史轴数字表格不进当前版**，只在归档件查 |
 
 ---
 
@@ -34,12 +35,17 @@
 |---|---|---|---|---|---|---|---|
 | 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md` |
 | 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 替代 `docs/archive/changelog-raw-20261106.md` |
-| CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（数字待重测） | CPU `1.0.0.0`；文内数字测于历史轴 `3.1.x` | 待人工确认 | 2026-11-06 | 原 `04_文档\C1_CPU性能优化.md`；§7 断链已于第 3 批纠正 |
+| CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（数字待重测） | CPU `1.0.0.0`；文内数字测于历史轴 `3.1.x` | 待人工确认 | 2026-11-06 | 原 `04_文档\C1_CPU性能优化.md`；§7 断链已于第 3 批纠正；**第 4B 批并入 `docs/archive/c10-async-detect-20261106.md`（§8）** |
+| 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并且替代 `c02` / `c04` / `c07` / `c08` / `c15` 五篇归档件 |
+| 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c06` / `c09` / `c11`，引用 `c03` 与 `oss-survey` §8.4 |
+| 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c03` / `c05` / `c12` / `c20` / `c21`，引用 `ab-mask` / `c02` / `c19` |
+| 画质对拍结论与证伪链 | `docs/design/design-quality-findings.md` | design | `Active`（**全部为历史轴结论，当前轴未重测**） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c14` / `c16` / `c17` / `c18` / `c19`，引用 `ab-metric` / `ab-smooth` / `c20` / `c21` |
 | 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md` |
 | 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` | guides | `Active`（装机状态待人工确认） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 原 `04_文档\顶层菜单插件说明.md`；未采用的 HTML+websocket 方案见 `docs/archive/ui-html-websocket-proposal-20261106.md` |
 | 许可与第三方组件口径 | `docs/reference/reference-licensing.md` | reference | `Active`（**口径冲突待人工确认，不含许可结论**） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 已合并 `docs/archive/opensource-boundary-20261106.md` 许可部分、`docs/archive/oss-survey-20261106.md` §4 |
-| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（第 3 批） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 无 |
+| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（第 4 批） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 无 |
 
+**当前版合计 11 篇**（README 1 · CHANGELOG 1 · design 5 · guides 2 · reference 1 · INDEX 1）。
 **预留空类**：仅剩 `docs/adr/`（暂无一事一篇的决策记录），以 `.gitkeep` 占位，写入正式文档时删占位即可。
 `docs/reference/` 已于第 3 批落地 `docs/reference/reference-licensing.md`，对应 `.gitkeep` 已删除。
 
@@ -59,47 +65,62 @@
 | 开源可商用方案边界（含被推翻结论） | `docs/archive/opensource-boundary-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §6；许可判据 / 选型表差异点**已于第 3 批并入** `docs/reference/reference-licensing.md` |
 | 工程 / 画质 11 项验收（3.1.34） | `docs/archive/acceptance-quality-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.34 / core 1.4.0` | 待人工确认 | 2026-11-06 | 见 `docs/CHANGELOG.md`、`README.md` §8 第 3 项（数字待重测） |
 | 复刻评分（3.1.39，79.0 / 70.2 分） | `docs/archive/scorecard-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.39 / core 1.4.0` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；历史分数口径**不另立当前版**，原件只读保全 |
-| 开源参考仓库对照与可复用清单 | `docs/archive/oss-survey-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `docs/reference/reference-licensing.md`（许可部分）；§7 / §8 差异点待第 4 批并入 `docs/design/design-*.md` |
-| 自研技术线路 D1（含「不上 GPU」结论） | `docs/archive/tech-roadmap-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §0、§3；证伪结论待第 4 批引用；头内登记 `S1/S2/S3` 命名陷阱 |
-| 掩码对拍结论（原 `S1`） | `docs/archive/ab-mask-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；口径差异点待第 4 批引用 |
-| 磨皮核对拍结论（原 `S2`） | `docs/archive/ab-smooth-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；**证伪结论必须保留**，待第 4 批引用 |
-| 对拍口径修正结论（原 `S3`） | `docs/archive/ab-metric-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；口径结论待第 4 批引用 |
+| 开源参考仓库对照与可复用清单 | `docs/archive/oss-survey-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `docs/reference/reference-licensing.md`（许可部分）；**§7.7 / §8.4 差异点已于第 4B 批并入** `docs/design/design-*.md`（GPU 化论证未带入） |
+| 自研技术线路 D1（含「不上 GPU」结论） | `docs/archive/tech-roadmap-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §0、§3；证伪结论**已于第 4B 批引用**；头内登记 `S1/S2/S3` 命名陷阱 |
+| 掩码对拍结论（原 `S1`） | `docs/archive/ab-mask-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；口径差异点**已于第 4B 批引用** |
+| 磨皮核对拍结论（原 `S2`） | `docs/archive/ab-smooth-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；**证伪结论必须保留，已于第 4B 批引用** |
+| 对拍口径修正结论（原 `S3`） | `docs/archive/ab-metric-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / core 1.4.x` | 待人工确认 | 2026-11-06 | 见 `README.md` §8 第 3 项；口径结论**已于第 4B 批引用** |
+| 边缘门控（原 `C2`） | `docs/archive/c02-edge-gate-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-smoothing.md` |
+| 对齐 lumina（原 `C3`） | `docs/archive/c03-lumina-align-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md`（并被引用于 `design-tone-detail.md`） |
+| 高低频磨皮（原 `C4`） | `docs/archive/c04-highlow-freq-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-smoothing.md` |
+| 鲁棒性（原 `C5`） | `docs/archive/c05-robustness-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md` |
+| 美白红润（原 `C6`） | `docs/archive/c06-whiten-ruddy-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-tone-detail.md` |
+| 引导滤波（原 `C7`） | `docs/archive/c07-guided-filter-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-smoothing.md`（证伪类，必须保留） |
+| 低频层对照（原 `C8`） | `docs/archive/c08-lowfreq-compare-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-smoothing.md`（证伪类，必须保留） |
+| 清晰 clarity（原 `C9`） | `docs/archive/c09-clarity-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-tone-detail.md` |
+| 异步检测（原 `C10`） | `docs/archive/c10-async-detect-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | **已于第 4B 批并入** `docs/design/design-cpu-performance.md` §8（不新建 design 文件） |
+| 锐化与全局锐化（原 `C11`） | `docs/archive/c11-sharpen-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-tone-detail.md` |
+| 人脸局部五项（原 `C12`） | `docs/archive/c12-face-region-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md` |
+| 与第三方画质差距定量分解（原 `C14`） | `docs/archive/c14-quality-gap-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-quality-findings.md` |
+| C 方案盒式低通（原 `C15`） | `docs/archive/c15-box-lowpass-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-smoothing.md` |
+| 合成阳性样本 / 痘印定量（原 `C16`） | `docs/archive/c16-spot-samples-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-quality-findings.md` |
+| 扫参 / 方案 A 证伪与门控（原 `C17`） | `docs/archive/c17-param-sweep-falsify-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-quality-findings.md`（证伪类，必须保留） |
+| 分辨率与脸大小依赖（原 `C18`） | `docs/archive/c18-scale-dependency-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-quality-findings.md` |
+| 真机尺度对拍（原 `C19`） | `docs/archive/c19-camera-scale-ab-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-quality-findings.md`；⚠️ **根因结论已被 `c20` 推翻，不得据此施工** |
+| 皮肤掩码白平衡依赖（原 `C20`） | `docs/archive/c20-whitebalance-rootcause-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md`（最终根因）；结论仍有效 |
+| 自适应肤色中心落地（原 `C21`） | `docs/archive/c21-adaptive-skin-center-20261106.md` | archive | `Deprecated` | 历史轴 `3.1.x / CoreEngine 0.x` | 待人工确认 | 2026-11-06 | 见 `docs/design/design-face-mask.md`；当前仍有效的实现 |
 
-> 归档件的**正文一字未改**，仅在文首追加废弃标注块。历史评分口径、版本演进史、20 条雷区、许可明细出处均可在此查证。
+> **归档件合计 34 篇**，正文一字未改，仅在文首追加废弃标注块；历史评分口径、版本演进史、
+> 20 条雷区、许可明细出处、全部历史轴数字表格均可在此查证。
 > 第 2 批 `opensource-boundary` 的许可差异点已在第 3 批并入 `docs/reference/reference-licensing.md`；
 > `scorecard` 的评分公式与历史分数口径经 2026-11-06 裁定**不抽成当前版、不长期保留**。
-> 第 3 批新增 5 篇全部为历史轴 `3.1.x / core 1.4.x` 口径：其中 `oss-survey` 头登记了待第 4 批引用的
-> 算法差异点，`tech-roadmap` / `ab-mask` / `ab-smooth` / `ab-metric` 头登记了**证伪类结论**与
-> `S1/S2/S3` 同名异义陷阱（对拍文档编号 ≠ 技术线路步骤编号），第 4 批归并 C 系列时须从这些头引用。
+> 第 3 批 5 篇头注的「待第 4 批引用 / 并入」与第 4A 批 19 篇头注的「第 4B 提交创建」，
+> **均已在第 4B 批闭合**；归档头属当时状态标注，**不回改归档件**。
+> 第 4 批归档件全部为历史轴 `3.1.x / CoreEngine 0.x` 口径，其证伪结论、`S1/S2/S3` 同名异义陷阱、
+> 证伪链（`c19` 根因被 `c20` 推翻、`c21` 落地）已在 4 份 design 当前版中逐条引用。
 
 ---
 
-## 3. 待治理登记（Pending · 分批推进）
+## 3. 分批治理记录（已完成）
 
-- **第 2 批已处理 6 篇**：`方案A_GPU移植开发计划.md`、`面板使用说明.md`、`方案边界调整_开源可商用.md`、
-  `验收报告_v3.1.34.md`、`复刻评分_v3.1.39.md` → `docs/archive/`（5 篇 `Deprecated`）；
-  `顶层菜单插件说明.md` → `docs/guides/guide-ui.md`（1 篇 `Active`）。
-- **第 3 批已处理 5 篇 + 新建 1 篇**：`开源参考仓库_对照与可复用清单.md`、`D1_我们自己的技术线路.md`、
-  `S1_掩码对拍结论.md`、`S2_磨皮核对拍结论.md`、`S3_对拍口径修正_结论.md` → `docs/archive/`
-  （5 篇 `Deprecated`，按 B 方案**不另建 roadmap 当前版**，证伪结论留在归档头供第 4 批引用）；
-  新建 `docs/reference/reference-licensing.md`（1 篇 `Active`），并联动修正
-  `docs/design/design-cpu-performance.md` §7 的归档后断链。
+**结论：`04_文档/` 的 tracked 历史文档待治理数已清零。**
+现只剩 **5 篇 `.gitignore` §10 排除件**（见 §4），不移动、不归档、不登记为 `Pending`。
 
-`04_文档\` 现剩 **24 篇** `.md` = **19 篇 tracked（待治理）** + **5 篇 `.gitignore` §10 排除（不纳入治理）**。
-tracked 部分全部为历史轴 `3.1.x / core 1.4.x` 口径，**不得当作当前结论**。
-剩余分组的基底与合并差异点仍须**逐批列清单确认后再动**：
-
-| 组 | 代表文件（篇数） | 初步方向 | 状态 / 批次 |
+| 批次 | 处理 | 结果 | 提交 |
 |---|---|---|---|
-| 磨皮 / 画质技术细节 C 系列 | `C2`~`C12`、`C14`~`C21`（**19 篇**） | 按模块择基底归并为 `docs/design/design-*.md` 4~5 份，其余归档；**必须保留 `C7` / `C8` / `C17` 的证伪类结论**，并引用第 3 批 5 篇归档头登记的差异点 / 证伪结论；标「历史轴实测，CPU `1.0.0.0` 未复核」 | `Pending` · 第 4 批 |
-| 仅本机保留 | `04_文档\` 下被 `.gitignore` §10 排除的 **5 篇**，文件名见 §4 | 不移动、不登记、不入库 | `Excluded` |
+| 首批 | 归档 5 篇、重写 / 增量更新 3 篇，建立 `docs/` 骨架 | 35 篇 `Pending` | `7ab8fc4` |
+| 第 2 批 | 归档 5 篇、新建 `guide-ui.md` | 35 → 29 篇（24 tracked + 5 Excluded） | `220ba0d` |
+| 第 3 批（B 方案） | 归档 5 篇、新建 `reference-licensing.md`、修 §7 断链 | 29 → 24 篇（19 tracked + 5 Excluded） | `84360b1` |
+| **第 4A 批** | 19 篇 C 系列 `git mv` 到 `docs/archive/cNN-*-20261106.md` 并加 `ARCHIVED` 头 | 归档总数 **15 → 34**；正文 CRLF 归一化后 **19/19 MATCH**；`04_文档/` 只剩 5 篇 Excluded | `bca2d6f` |
+| **第 4B 批** | 新建 4 份 `design-*.md`；`c10` 并入 `design-cpu-performance.md` §8；同步本表与根 `README.md` | **tracked 待治理清零**；4A 头的临时断链闭合；当前版不搬任何历史轴数字表格 | 本次提交 |
 
-> **归类修正（2026-11-06）**：首批曾把 `一级入口说明.md` 误列为「旧入口 / `Pending`」。
-> 核查 `.gitignore:184` 后确认它属于 §4 的 `Excluded`（含参考实现内部细节，仅本机查证），
-> **不纳入治理、不归档、不移动**；原「归档并保留菜单链路差异点」的初步方向作废。
-
-> 与 2026-11-06 诊断的「82 篇自研文档 / 8 个真实主题组」口径一致；本表只登记已落地项与剩余分组，
-> 逐篇清单仍以当时输出的全量表为准。
+- 第 4 批方案经用户确认：`1.A`（19 篇全归档但必须新建当前版）、`2.照上表`、
+  `3.C10 并入 design-cpu-performance.md`、`4.完全不搬数字表格`、`5.两次提交`。
+- 4 份当前版只保留「结论 / 开关 / 坑 / 证伪 / 失效说明」；开关名与默认值已按 `01_源码/` 逐字复核
+  （例如 `freqMagHi` 是配置字段、环境变量为 `BEAUTY_FREQ_MAG`；不存在 `BEAUTY_FREQ_MAG_HI`）。
+- **归类修正（2026-11-06）**：首批曾把 `一级入口说明.md` 误列为「旧入口 / `Pending`」。
+  核查 `.gitignore:184` 后确认它属 §4 的 `Excluded`，**不纳入治理、不归档、不移动**。
+- 与 2026-11-06 诊断的「82 篇自研文档 / 8 个真实主题组」口径一致；本表只登记已落地项。
 
 ---
 
@@ -123,9 +144,10 @@ tracked 部分全部为历史轴 `3.1.x / core 1.4.x` 口径，**不得当作当
 3. **归档动作**：用 `git mv` 保留历史（可逆），按 `主题-YYYYMMDD.md` 命名，文首加废弃标注；**禁止直接删除原件**。
 4. **状态变更**：`Active → Deprecated` 必须同时写清「见 xxx」，不允许出现无替代文档的孤儿归档。
 5. **提交前**：`python 05_验证\check_upload.py --staged` 过闸门；确认没有把 §4 的文件加回索引。
+6. **当前版不搬数字**：历史轴实测数据只在 `docs/archive/` 查；当前版出现的数字只能是源码里的开关取值 / 编译期常量。
 
-> 完整的防腐化机制建议（模板文件、元数据规范、PR 联动检查、定期巡检规则）属治理输出第 6 项，
-> **待 §3 全部分批完成后单独给出**，本表不代替。
+> 治理输出第 6 项「防腐化机制建议」（模板文件、元数据规范、提交联动检查、定期巡检规则）
+> **现已具备给出条件**（§3 已全部分批完成），待单独输出；本表不代替。
 
 ---
 
@@ -136,6 +158,8 @@ tracked 部分全部为历史轴 `3.1.x / core 1.4.x` 口径，**不得当作当
 | 2026-11-06 | 建立 `docs/` 目录与 `docs/INDEX.md`；首批登记 5 篇 `Active`、5 篇 `Deprecated`；`04_文档\` 余 35 篇标 `Pending`；法务排除项标 `Excluded` |
 | 2026-11-06 | 第 2 批：登记新增 1 篇 `Active`（`docs/guides/guide-ui.md`）、5 篇 `Deprecated`；`04_文档\` 35 → 29 篇（24 tracked + 5 Excluded）；修正 `一级入口说明.md` 的 `Pending` → `Excluded` 误归类；登记第 3 / 4 批方向与待合并差异点 |
 | 2026-11-06 | 第 3 批（B 方案）：新增 `docs/reference/reference-licensing.md`（1 篇 `Active`）并删 `docs/reference/.gitkeep`；登记 5 篇 `Deprecated`（`oss-survey` / `tech-roadmap` / `ab-*`）；`04_文档\` 29 → 24 篇（19 tracked + 5 Excluded）；关闭第 3 批两个 `Pending` 组；联动修 `design-cpu-performance.md` §7 断链 |
+| 2026-11-06 | 第 4A 批：登记 19 篇 `Deprecated`（`c02`~`c21`）；归档总数 15 → 34；`04_文档\` tracked 清零，仅剩 5 篇 Excluded；单独提交 `bca2d6f` |
+| 2026-11-06 | 第 4B 批：登记新增 4 篇 `Active`（`design-smoothing` / `design-tone-detail` / `design-face-mask` / `design-quality-findings`）；`design-cpu-performance.md` 登记「并入 `c10`」；闭合第 3 批 5 篇与第 4A 批 19 篇归档头的「待第 4 批」标注；§3 改为已完成记录；§0 补「当前版数字」规则、§5 补第 6 条维护约定 |
 
 ---
 

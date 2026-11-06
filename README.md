@@ -147,7 +147,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `01_源码\` | 自研引擎全部实现（`.cpp/.h`） |
 | `02_构建\` | 编译脚本、`build_output\`（历史定稿，**勿覆盖**）、`build_1.0.0.0\`（当前 CPU 产物）、`build_3.1.40\`（历史） |
 | `03_装机\` | 装机/卸载与回滚脚本（**目前均为历史轴版本，见 §2.3**） |
-| `04_文档\` | 尚未治理的分主题历史文档；**新文档不再放这里** |
+| `04_文档\` | tracked 历史文档已全部归档；仅剩 5 篇 `.gitignore` §10 排除件（仅本机查证）；**新文档不再放这里** |
 | `05_验证\` | 离线验证脚本、goldens 真值、上传自检 |
 | `06_安装包\` | NSIS 脚本 `obs-beauty.nsi`、打包脚本、装卸实测脚本、安装包产物 |
 | `07_开源参考\` | MIT 许可原文与 effect 源文件 |
@@ -168,13 +168,23 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 |---|---|
 | 本 README（唯一） | `README.md` |
 | 变更日志（全局唯一） | `docs/CHANGELOG.md` |
-| CPU 性能设计 | `docs/design/design-cpu-performance.md` |
+| CPU 性能设计（含异步检测 §8） | `docs/design/design-cpu-performance.md` |
+| 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` |
+| 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` |
+| 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` |
+| 画质对拍结论与证伪链 | `docs/design/design-quality-findings.md` |
 | 安装包构建指南 | `docs/guides/guide-build-installer.md` |
 | 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` |
 | 许可与第三方组件口径 | `docs/reference/reference-licensing.md` |
 | 历史原件（只读） | `docs/archive/` |
 
 **可信度顺序**：逐字源码 > 动态实测 > 推断 > 拟合（`01_源码\` > 本 README > `04_文档\`）。
+
+> **当前版文档的数字口径（第 4 批起）**：`docs/design/` 的当前版只保留结论 / 开关 / 坑 / 证伪 /
+> 失效说明，**不搬历史轴数字表格**；文中出现的数字仅是 `01_源码\` 里的开关取值 / 编译期默认值。
+> 扫参表、保留率、耗时、IoU 等历史实测数据只在 `docs/archive/` 查（2026-11-06 裁定）。
+> 开关名与默认值已按当前源码逐字复核，例如幅度门控上限是配置字段 `freqMagHi`、
+> 环境变量为 `BEAUTY_FREQ_MAG`，**不存在 `BEAUTY_FREQ_MAG_HI`**。
 
 ---
 
@@ -215,7 +225,7 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 |---|---|---|
 | 1 | **许可口径冲突** | 三处互斥：根 README / 历史 README §16.1 的「动态链接 libobs → GPL-2.0，源码须以 GPLv2 提供」；旧入口 §1 的「不得商用或再分发」；开源清单 §4 / 方案边界 §1 的「闭源分发且按可商用再分发选型」。详见 `docs/reference/reference-licensing.md` §2、§5，**确定对外口径后再统一，不得据任一处对外宣称**。 |
 | 2 | CPU `1.0.0.0` 装机脚本 | `03_装机\` 无对应版本脚本；真机装/卸、`e2e_test.ps1` 对新包未跑过回归。 |
-| 3 | 性能与画质数字 | `6.43 / 7.25 / 7.11 / 9.48 ms`、`79.0 / 70.2 分`、`14/14` 均为**历史轴引擎层口径**，未在 CPU `1.0.0.0` 上重测；口径互不通用，勿混用。 |
+| 3 | 性能与画质数字 | `6.43 / 7.25 / 7.11 / 9.48 ms`、`79.0 / 70.2 分`、`14/14` 均为**历史轴引擎层口径**，未在 CPU `1.0.0.0` 上重测；口径互不通用，勿混用。第 4 批 4 份 `docs/design/design-*.md` 的结论同样来自历史轴归档头登记，**当前轴未重跑 golden A/B / 性能 A/B / 真机对拍**；历史数字一律只在 `docs/archive/` 查。 |
 | 4 | 已知遗留 | 旧入口记录的「磨皮=0 时锐化滑块无效」「浅色主题未复核」「美白补 6.5%」「祛斑痘/亮眼素材信号在噪声级」均属历史轴，需在当前代码上逐项复核是否仍存在。 |
 | 5 | ~~旧版 GPU 移植计划~~ | ✅ **已关闭（第 2 批）**：`04_文档\方案A_GPU移植开发计划.md` 已归档为 `docs/archive/gpu-porting-plan-20261106.md`，文首标「与纯 CPU 方向冲突、从未开工、不得据此施工」。 |
 | 6 | ~~`.gitignore` 构建产物规则~~ | ✅ **已关闭（提交 `e14f3f2`）**：已补 `02_构建/build_*/` 并回归 `check_upload.py`，详见 §6。 |
@@ -246,6 +256,12 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `04_文档/S1_掩码对拍结论.md`、`S2_磨皮核对拍结论.md`、`S3_对拍口径修正_结论.md` | 第 3 批归档 `docs/archive/ab-mask-20261106.md`、`docs/archive/ab-smooth-20261106.md`、`docs/archive/ab-metric-20261106.md`（`ab-*` 命名避开与 `D1` §4 步骤编号的同名异义；证伪 / 口径结论留归档头待第 4 批引用） |
 | `docs/archive/opensource-boundary-20261106.md` §1 / §2、`oss-survey` §4 | **已合并自**（2026-11-06，第 3 批）：许可判据、选型表、许可证红线 → 新建 `docs/reference/reference-licensing.md`（仅许可部分，被推翻的 GPU 化结论未带入） |
 | `docs/design/design-cpu-performance.md` §7 | 第 3 批增量更新：旧引用改指 `docs/archive/oss-survey-20261106.md` §3，补注「历史轴 GPU 化推算、不得据此施工」的有效性边界（**原文未删改、未润色**） |
+| `04_文档/C2`~`C12`、`C14`~`C21`（19 篇） | **第 4A 批**（提交 `bca2d6f`）：`git mv` 到 `docs/archive/cNN-*-20261106.md`，逐篇加 `ARCHIVED` 头登记废弃原因、失效信息、仍有价值内容与当前版映射；正文逐字保全（CRLF 归一化后 19/19 MATCH），归档总数 15 → 34 |
+| `docs/archive/c02` / `c04` / `c07` / `c08` / `c15` | **第 4B 批**：归并为 `docs/design/design-smoothing.md`（结论 / 开关 / 坑 / 证伪 / 失效说明） |
+| `docs/archive/c06` / `c09` / `c11`（并引用 `c03`） | **第 4B 批**：归并为 `docs/design/design-tone-detail.md`；含三处「EMA」同名异义辨析 |
+| `docs/archive/c03` / `c05` / `c12` / `c20` / `c21`（并引用 `ab-mask` / `c02` / `c19`） | **第 4B 批**：归并为 `docs/design/design-face-mask.md`；闭合 `c19` 根因被 `c20` 推翻、`c21` 落地的证伪链 |
+| `docs/archive/c14` / `c16` / `c17` / `c18` / `c19`（并引用 `ab-metric` / `ab-smooth` / `c20` / `c21`） | **第 4B 批**：归并为 `docs/design/design-quality-findings.md`；只留证伪链与口径纪律，**不搬历史轴数字表格** |
+| `docs/archive/c10-async-detect-20261106.md` | **第 4B 批**：并入 `docs/design/design-cpu-performance.md` 新增 §8（不新建 design 文件）；登记抢核副作用、确定性与 stagesurface 往返盲区 |
 
 ---
 
