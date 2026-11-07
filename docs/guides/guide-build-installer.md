@@ -2,9 +2,9 @@
 
 | 字段 | 值 |
 |---|---|
-| 版本 | `1.0.0.2` |
-| 最后更新 | 2026-11-06 |
-| 适用代码版本 | CPU 线 `1.0.0.2`（提交 `5323856`） |
+| 版本 | `1.0.0.3` |
+| 最后更新 | 2026-11-07 |
+| 适用代码版本 | CPU 线 `1.0.0.3`（提交 `1e35e8a`） |
 | 维护人 | 待人工确认 |
 | 状态 | `Active` |
 | 替代文档 | `docs/archive/acceptance-installer-20261106.md`（3.1.39 装/卸验收原件）；旧文 `06_安装包\README_打包说明.md` 已移入本文件重写 |
@@ -13,9 +13,9 @@
 
 ## 0. 一句话结论
 
-**`1.0.0.2` 默认开启人脸框时序 EMA，产物输出带帧间状态；离线复现历史 golden 基线须设 `BEAUTY_FACE_EMA=0 BEAUTY_FACE_HOLD=0`。打包脚本 `build_setup.ps1` 的默认取件目录与版本串已切到 `1.0.0.2`（`02_构建\build_1.0.0.2\`）；现存安装包仍是 `06_安装包\OBS美颜_CPU_v1.0.0.0.exe`，`1.0.0.2` 包尚未生成。脚本先做版本串自检，再经纯 ASCII 暂存目录调 NSIS 编译。旧版 `OBS美颜_Setup_v3.1.39.exe` 的路径、md5、版本值一律不适用。**
+**`1.0.0.2` 起默认开启人脸框时序 EMA，产物输出带帧间状态；离线复现历史 golden 基线须设 `BEAUTY_FACE_EMA=0 BEAUTY_FACE_HOLD=0`。打包脚本 `build_setup.ps1` 的默认取件目录与版本串已切到 `1.0.0.3`（`02_构建\build_1.0.0.3\`）；当前安装包为 `06_安装包\OBS美颜_CPU_v1.0.0.3.exe`（2026-11-07 C-1 重打包版），`v1.0.0.0.exe` 为立轴时前版产物。按用户裁定 C-1，`obs-beauty.nsi` / `e2e_test.ps1` / 本打包脚本 / `install_1.0.0.3.bat` 的插件目标路径已统一到 `%ProgramData%\obs-studio\plugins\<插件目录名>\bin\64bit\`。脚本先做版本串自检，再经纯 ASCII 暂存目录调 NSIS 编译。旧版 `OBS美颜_Setup_v3.1.39.exe` 的路径、md5、版本值一律不适用。**
 
-2026-11-06 实测：打包自检全绿，产物 **3,637,129 B**，Windows 版本资源 `ProductVersion` / `FileVersion` 均为**四段** `1.0.0.0`，`ProductName` = `OBS美颜 CPU 版`。（该实测属 `1.0.0.0` 立轴时；`1.0.0.2` 未重新打包）
+2026-11-07 实测（C-1 重打包后）：`build_setup.ps1` 版本串自检 `1.0.0.3` 全绿，`makensis` 编译成功，产物 **3,638,687 B**、MD5 `1c31531db60eee19130efc1fcc71ccf4`；Windows 版本资源 `ProductVersion` / `FileVersion` 均为**四段** `1.0.0.3`，`ProductName` = `OBS美颜 CPU 版`。当日第一次打包的 3,639,172 B / `aeba502f77246626282fa2154fc34b90` 已被同名覆盖作废；2026-11-06 的旧实测（3,637,129 B、四段 `1.0.0.0`）属 `1.0.0.0` 立轴时，与本次产物不可混用。包内四件指纹见 `docs/CHANGELOG.md` §2。
 > NSIS 每次编译的时间戳/压缩顺序不同，**同一份源码连编两次 md5 也不同**；md5 只用于核对「这一次打出来的包」，不能当源码一致性证据。
 
 ---
@@ -24,14 +24,14 @@
 
 | 项 | 路径 / 值 |
 |---|---|
-| 滤镜 DLL | `02_构建\build_1.0.0.2\obs-beauty.dll`（含 `1.0.0.2` 与 `obs_beauty_filter` 串） |
-| 面板 DLL | `02_构建\build_1.0.0.2\obs-beauty-ui.dll`（含 `1.0.0.2` 串，**须由 `build-ui_320.bat` 带 `/DBEAUTY_UI_CPU_EDITION=1` 编出**） |
+| 滤镜 DLL | `02_构建\build_1.0.0.3\obs-beauty.dll`（含 `1.0.0.3` 与 `obs_beauty_filter` 串；**另含残留的 `1.0.0.2`，见 §6 第 7 项**） |
+| 面板 DLL | `02_构建\build_1.0.0.3\obs-beauty-ui.dll`（含 `1.0.0.3` 串，**须由 `build-ui_320.bat` 带 `/DBEAUTY_UI_CPU_EDITION=1` 编出**） |
 | ONNX Runtime | `05_验证\deps\runtime\onnxruntime.dll`（缺时回退 `参考文件\03_依赖与SDK_OBS\installer-stage\`） |
 | YuNet 模型 | `05_验证\models\yunet.onnx`（同上回退） |
 | NSIS | `C:\Program Files (x86)\NSIS\makensis.exe` |
 
 > **别拿 `02_构建\build_output\` 里的 DLL 打包**——那是 3.1.40 / 3.1.39 历史定稿，版本串自检会直接报
-> `does not contain '1.0.0.2' - it is a stale build`。这也是「独立产物目录」设计的目的：定稿 DLL 一个字节都不用动。
+> `does not contain '1.0.0.3' - it is a stale build`。这也是「独立产物目录」设计的目的：定稿 DLL 一个字节都不用动。
 
 ---
 
@@ -40,7 +40,7 @@
 ### 2.1 编译两件 DLL
 
 ```bat
-set BEAUTY_OUTDIR=D:\插件\OBS美颜源码\02_构建\build_1.0.0.2
+set BEAUTY_OUTDIR=D:\插件\OBS美颜源码\02_构建\build_1.0.0.3
 D:\插件\OBS美颜源码\02_构建\build_manual.bat
 D:\插件\OBS美颜源码\02_构建\build-ui_320.bat
 ```
@@ -58,23 +58,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "...\build_setup.ps1" -KeepS
 
 脚本按顺序做 7 件事：
 
-1. 取上述 4 个源文件（`$BuildOut` 默认 `02_构建\build_1.0.0.2`，可用环境变量 **`BEAUTY_BUILD_OUT`** 覆盖）
-2. **版本串自检**：滤镜与面板 DLL 里必须搜到 `1.0.0.2`，滤镜还须含 `obs_beauty_filter`；否则直接 `exit 1`（防「把上一版构建打进包，界面上看不出来」）
+1. 取上述 4 个源文件（`$BuildOut` 默认 `02_构建\build_1.0.0.3`，可用环境变量 **`BEAUTY_BUILD_OUT`** 覆盖）
+2. **版本串自检**：滤镜与面板 DLL 里必须搜到 `1.0.0.3`，滤镜还须含 `obs_beauty_filter`；否则直接 `exit 1`（防「把上一版构建打进包，界面上看不出来」）
 3. 与已装机文件对照 md5，**不一致只提示不阻断**（机器上跑的可能是另一版，这不是错误）
 4. 暂存到 `$env:TEMP\obsbeauty_pkg`，路径必须**纯 ASCII**，否则 NSIS 报 `no files found`
 5. 生成暂存目录 `docs\README.txt`（用户说明书）与 `docs\md5.txt`（四件文件清单）
 6. 确保 `obs-beauty.nsi` 为 **UTF-8 with BOM**（否则中文界面乱码；脚本会自动补 BOM）
-7. 调 `makensis` 编译，产物落到 `06_安装包\OBS美颜_CPU_v1.0.0.2.exe`，打印大小/md5/四件指纹，最后清掉暂存目录（`-KeepStage` 时保留）
+7. 调 `makensis` 编译，产物落到 `06_安装包\OBS美颜_CPU_v1.0.0.3.exe`，打印大小/md5/四件指纹，最后清掉暂存目录（`-KeepStage` 时保留）
 
 ### 2.3 版本号只改一处
 
 `build_setup.ps1` 顶部四行，通过 `/D` 传给 nsi：
 
 ```powershell
-$Ver       = '1.0.0.2'   # 包版本（产物文件名、控制面板显示）
-$FilterVer = '1.0.0.2'   # 滤镜版本
-$PanelVer  = '1.0.0.2'   # 面板版本
-$CoreVer   = '1.0.0.2'   # 引擎版本（已并入 CPU 单轴，不再有独立 core 号）
+$Ver       = '1.0.0.3'   # 包版本（产物文件名、控制面板显示）
+$FilterVer = '1.0.0.3'   # 滤镜版本
+$PanelVer  = '1.0.0.3'   # 面板版本
+$CoreVer   = '1.0.0.3'   # 引擎版本（已并入 CPU 单轴，不再有独立 core 号）
 ```
 
 唯一口径出处仍是 `01_源码\beauty_params.h` 的 `BEAUTY_BUILD_STR`。
@@ -88,24 +88,32 @@ $CoreVer   = '1.0.0.2'   # 引擎版本（已并入 CPU 单轴，不再有独立
 | 约束 | 原因 | 脚本里的做法 |
 |---|---|---|
 | **源路径必须纯 ASCII** | NSIS 处理中文源路径报 `no files found` | 先复制到 `%TEMP%\obsbeauty_pkg`，`File` 只认暂存目录 |
-| **`/DOUTFILE` 不能含中文** | makensis 按控制台代码页解析命令行，中文名变乱码文件名 | 先出 `OBSBeauty_CPU_Setup_v1.0.0.2.exe`，再用 PowerShell 复制改名为中文名 |
+| **`/DOUTFILE` 不能含中文** | makensis 按控制台代码页解析命令行，中文名变乱码文件名 | 先出 `OBSBeauty_CPU_Setup_v1.0.0.3.exe`，再用 PowerShell 复制改名为中文名 |
 | **源文件自检必须在编译期** | `File` 是编译期把内容写进 exe 的，安装时不需要暂存目录，而脚本编完就清掉它 | nsi 里用 `!if ! /FileExists … !error`；写成运行时会导致安装直接 Abort（退出码 2） |
 
-**四段版本号不能再补 `.0`**：`PKGVER` 已是 `1.0.0.2`，`VIProductVersion` / `FileVersion` 直接取 `${PKGVER}`；
-沿用旧写法 `${PKGVER}.0` 会变成五段 `1.0.0.2.0`。
+**四段版本号不能再补 `.0`**：`PKGVER` 已是 `1.0.0.3`，`VIProductVersion` / `FileVersion` 直接取 `${PKGVER}`；
+沿用旧写法 `${PKGVER}.0` 会变成五段 `1.0.0.3.0`。
 
 ---
 
 ## 4. 包里装什么 / 装到哪
 
-| 文件 | 装到 |
+| 文件 | 装到（2026-11-07 C-1 统一口径） |
 |---|---|
-| `obs-beauty.dll` | `C:\Program Files\obs-studio\obs-plugins\64bit\` |
+| `obs-beauty.dll` | `C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\` |
 | `onnxruntime.dll` | 同上 |
-| `models\yunet.onnx` | `…\obs-plugins\64bit\models\` |
+| `models\yunet.onnx` | `…\obs-beauty\bin\64bit\models\` |
 | `obs-beauty-ui.dll` | `C:\ProgramData\obs-studio\plugins\obs-beauty-ui\bin\64bit\` |
 
-外加 `C:\Program Files\obs-beauty\` 下的 `README.txt`、`md5.txt`、卸载器。
+外加 `C:\Program Files\obs-beauty\` 下的 `README.txt`、`md5.txt`、卸载器与 `backup\`。
+`InstallDir` 与 HKLM 注册表仍在原处，因此安装包仍声明 `RequestExecutionLevel admin`；
+插件四件套本身不再写入 `C:\Program Files`。
+
+> ✅ **口径已统一（用户裁定 C-1）**：`obs-beauty.nsi` / `e2e_test.ps1` / `build_setup.ps1` /
+> `install_1.0.0.3.bat` 现在都用本表这条 ProgramData 全局插件路径。
+> 目录名 `obs-beauty` / `obs-beauty-ui` 必须与各自 DLL 主名一致，且 DLL 必须位于 `bin\64bit\` 下，
+> 否则 OBS 静默跳过且不写日志（本指南 §3、"guide-ui.md" §3）。
+> 历史轴 `C:\Program Files\obs-studio\obs-plugins\64bit\` 扁平布局已废弃，只在卸载器清理旧 SDK 目录时按历史路径引用。
 
 > **不能改的两处位置**：`beauty_core.cpp` 的 `ensureReady()` 用 `selfDir()`（= 滤镜 DLL 所在目录）解析
 > `onnxruntime.dll` 与 `models\yunet.onnx`。放错位置滤镜照样能加载，但**人脸检测静默失效 → 磨皮退化成全帧**，不报错，只对拍能看出。
@@ -117,8 +125,10 @@ $CoreVer   = '1.0.0.2'   # 引擎版本（已并入 CPU 单轴，不再有独立
 
 ## 5. 卸载
 
-> **待人工确认**：CPU `1.0.0.0` 立轴时的 NSIS 卸载逻辑沿用 3.1.39 版本（本轮立轴只改了名称、版本与版本资源，未改卸载 Section），
-> 且 `e2e_test.ps1` **尚未对新包跑过装/卸回归**。以下规则来自历史验收记录，需复跑确认后方可作为保证。
+> ✅ **2026-11-07 16:56 已装/卸实测**：用户关闭 OBS 后以管理员 PowerShell 独立进程跑完 `e2e_test.ps1`，
+> **40/40 PASS、0 FAIL**；C-1 改过的卸载 Section（新增 `obs-beauty` 目录链 `RMDir`、旧 SDK 清理回退历史路径）
+> 已由 A3 的 11 项删除断言与 B2 的 9 项断言（含 4 项备份还原）覆盖，见 `docs/CHANGELOG.md` §2 与本文 §6 第 4 项。
+> 以下规则由此从「历史记录」升级为「本版实测通过」。
 
 历史规则：「装之前什么样，卸完还是什么样」——装前有同名文件先备份、卸载时还原；装前没有则删除；
 `models` 目录按是否本包创建决定删或留；`ui.ini` 默认保留；别的途径装的 SDK 目录一律不动。
@@ -132,12 +142,16 @@ $CoreVer   = '1.0.0.2'   # 引擎版本（已并入 CPU 单轴，不再有独立
 
 | # | 项 | 说明 |
 |---|---|---|
-| 1 | **脚本生成的用户说明书路径过时** | `build_setup.ps1` 生成的 `README.txt` 末尾仍写 `09_安装包\build_setup.ps1` / `09_安装包\obs-beauty.nsi`，实际目录是 `06_安装包\`。本轮未改代码，待确认后修。 |
+| 1 | ~~脚本生成的用户说明书路径过时~~ | ✅ **已关闭（C-1）**：`build_setup.ps1` 生成的 `README.txt` 末尾已改为 `06_安装包\build_setup.ps1` / `06_安装包\obs-beauty.nsi`，四个安装路径也同步到 ProgramData。 |
 | 2 | **日志样例与实际不符** | 同一份 `README.txt` 里写 `init OK (v1.0.0.0, engine=core/1.0.0.0 …)`，而 `obs-beauty.cpp` 的 init 日志已改为 `init OK (CPU v…)`。按该样例去日志里找会找不到。待确认后修。 |
 | 3 | 第三方 SDK 名称字样 | `README.txt` 仍出现某商业 SDK 的产品名，与「正文中性表述」的合规口径不一致。待人工确认。 |
-| 4 | e2e 回归 | `06_安装包\e2e_test.ps1` 已指向新安装包名，但 CPU `1.0.0.2` 的真机装/卸两轮 40 项断言**未跑**。 |
+| 4 | ~~e2e 回归~~ | ✅ **已关闭（2026-11-07 16:56）**：`06_安装包\e2e_test.ps1` 在管理员 `-NoProfile` 独立进程执行，Phase A 25/25、Phase B 15/15，合计 **40/40 PASS、0 FAIL**；日志 `%TEMP%\obsbeauty_test\log.txt`（"log.txt" l. 1–73），终态四件 MD5 与测试前一致。此前「未跑」结论作废；完整日志逐字归档在 `05_验证/e2e_install_20261107.md`。 |
 | 5 | 图形界面 | 静默安装验证过落地行为，界面文字未逐页截图核对（UTF-8 BOM + `Unicode true` 沿用既有写法）。 |
 | 6 | 环境边界 | 只支持 64 位 OBS；只认注册表 `HKLM\SOFTWARE\OBS Studio` 的(默认)值（缺失回退 `%ProgramFiles%\obs-studio`）；不做 OBS 版本兼容性判断。 |
+| 7 | **滤镜 DLL 仍含旧版本串** | `01_源码/beauty_core.cpp:1166` 的 `CoreEngine::version()` 硬编码返回 `"1.0.0.2"`，与 `BEAUTY_BUILD_STR = "1.0.0.3"` 不一致；`obs-beauty.cpp:911` 把该值拼进 init 日志，故 1.0.0.3 滤镜打印 `engine=core/1.0.0.2`。`build_setup.ps1` 版本串自检已加注释说明，**本批未改源码、未重编 DLL**；修复属修订位变更，另行裁定。详见 `docs/CHANGELOG.md` §2 与根 `README.md` §8 第 8 项。 |
+| 8 | ~~路径口径冲突 + 执行环境阻断~~ | ✅ **全部关闭**：C-1 把 `obs-beauty.nsi` / `e2e_test.ps1` / `build_setup.ps1` / `install_1.0.0.3.bat` 统一到 `%ProgramData%\obs-studio\plugins\<插件目录名>\bin\64bit`，判据未改、四键齐全；用户关闭 OBS 并在管理员独立进程复跑后，提权被拦、OBS 占用、safe-delete 包装三项阻断均不复现，40 项断言全过（见第 4 项）。历史 `C:\Program Files\obs-studio\obs-plugins\64bit` 扁平布局废弃。遗留的历史残留模型见第 10 项。 |
+| 9 | 同版本二次打包，版本递增待裁定 | C-1 只改安装链路，两件 DLL 未重编，`BEAUTY_BUILD_STR` 仍 `1.0.0.3`；产物沿用同号，MD5 由 `aeba502f77246626282fa2154fc34b90` → `1c31531db60eee19130efc1fcc71ccf4`。按四段式「修 bug → 修订位 +1」应为 `1.0.1.0`，按根 `README.md` §1 项目惯例「第四位 +1」应为 `1.0.0.4`；两者都要求重编 DLL 并全链路同步版本串。裁定前不得把两个同号 exe 当成同一产物，见根 `README.md` §8 第 10 项。 |
+| 10 | 历史扁平路径残留模型 | 2026-11-07 16:57 实测 `C:\Program Files\obs-studio\obs-plugins\64bit\models\yunet.onnx` 仍存在，而同目录的 `obs-beauty.dll` / `onnxruntime.dll` 已不存在。该文件属于历史轴装机遗留，不在 C-1 与本次 40 项判据覆盖范围内；本批**只读核对、未删除**（系统目录，需人工确认后再处理）。 |
 
 ---
 

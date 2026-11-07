@@ -29,10 +29,12 @@
 | 滤镜 ID | `obs_beauty_filter`（未改，老场景继续可用） |
 | UI | `BEAUTY_UI_CPU_EDITION=1` 时显示「美颜·CPU(&A)」菜单、`CPU 版` 徽章、`CPU v1.0.0.3`；默认 `0` 时零变化 |
 | 构建产物 | `02_构建\build_1.0.0.3\`（当前）；`02_构建\build_1.0.0.2\`、`build_1.0.0.1\` 与 `build_1.0.0.0\` 为前版；`build_output\` 里的 3.1.x 定稿 DLL **保持不动** |
-| 安装包 | 现存 `06_安装包\OBS美颜_CPU_v1.0.0.0.exe`（前版产物，四段 `1.0.0.0`）；打包脚本需切到 `1.0.0.3`，**`1.0.0.3` 包尚未生成** |
+| 安装包 | `06_安装包\OBS美颜_CPU_v1.0.0.3.exe`（**2026-11-07 C-1 重打包**，3,638,687 B，MD5 `1c31531db60eee19130efc1fcc71ccf4`，四段 `1.0.0.3`）；当日第一次打包的同号 exe（3,639,172 B / `aeba502f77246626282fa2154fc34b90`）已被覆盖作废；`OBS美颜_CPU_v1.0.0.0.exe` 为立轴时前版产物 |
+| 装机口径 | 已按用户裁定 C-1 统一到 `%ProgramData%\obs-studio\plugins\<插件目录名>\bin\64bit\`（目录名与 DLL 主名一致）；`C:\Program Files\obs-studio\obs-plugins\64bit\` 扁平布局废弃 |
 | 纯 CPU 口径 | 不引入自定义 shader / hlsl / GPU 计算管线；`gs_*` 仅为 OBS 框架帧 I/O |
 
-**尚未完成、不得当作已交付**：CPU `1.0.0.3` 的安装包生成、`e2e_test.ps1` 的 40 项断言、少核机器与多人脸场景、L1 性能优化、L2 功能对齐。画质 golden A/B 复测已完成，但建议项未通过，不等于画质验收通过；遮挡闪烁的修复在合成遮挡序列上已真机跑通（不再崩溃、链路正常），**物理遮挡复现与观感判定仍待用户确认**。
+**已完成（2026-11-07 16:56）**：`e2e_test.ps1` 的 40 项装/卸断言 **40/40 PASS、0 FAIL**（日志 `%TEMP%\obsbeauty_test\log.txt`，逐项见 §2），装卸验收不再列为缺口。
+**尚未完成、不得当作已交付**：同版本二次打包是否递增版本号的裁定、少核机器与多人脸场景、1080p 与录制链路、L1 性能优化、L2 功能对齐、`CoreEngine::version()` 版本串修复（见 §2）。画质 golden A/B 复测已完成，但建议项未通过，不等于画质验收通过；遮挡闪烁的修复在合成遮挡序列上已真机跑通（不再崩溃、链路正常），**物理遮挡复现与观感判定仍待用户确认**。
 引擎层性能 A/B 前后对比与画质 golden A/B 复测均已于 2026-11-06 在本轴完成，判定见 §1.1 第二层；两项结论**不覆盖**少核机器与多人脸场景。
 详见根 `README.md` §8 与 `docs/guides/guide-build-installer.md` §6。
 
@@ -83,6 +85,76 @@
 | **真机崩溃修复**：`updateMask` 换尺寸时补齐 `bounds_` / `faces_` 复位；`collectAsync` 新增帧尺寸校验，跨尺寸的 worker 结果整批丢弃且不计入检测失败迟滞；`updateMask` 返回前新增掩码↔帧一致性兜底 | 根因：所有滤镜实例共享同一个 core 单例（`acquireSlot` 恒返 0），720p 摄像头与 1080p 图像源交替喂同一份 `mask_/bounds_`，旧坐标系的包围盒配新帧宽高在 `toneColor` 按 `(y*w+x)*4` 越界读 → `0xc0000005`。真机 e2e（`05_验证/goldens/masks/e2e_occ_1002_20261106.*`）修复前 2/2 必崩、修复后 13 帧遮挡序列完整跑通 |
 | `smoothFaceBoxes()` 加互斥锁 + 跨分辨率防线：历史框超出当前帧 ±50% 即整体复位采纳本帧检测 | 修正 `g_faceEmaPrev` 线程约束注释的漏判（`asyncOn_` 只互斥单实例内部，管不住多实例与 worker）；迟滞分支 `r=p` 不再把跨分辨率坐标原样搬进当前帧 |
 | 离线自检复跑通过 | `face_ema_ab`：OLD==OFF 8/8 逐字节、ON 7/8 帧不同、首帧相同；`occlusion_ab`：S0/S1 两组判据 J1–J5 全过，ON 的 IoU（0.889）优于 OFF（0.878），EMA+迟滞无回归 |
+| **交付链路对齐（2026-11-07，方案 A + B）** | `06_安装包\build_setup.ps1` 的取件目录、四个 `$*Ver`、版本串自检与注释，`obs-beauty.nsi` 的兜底 define 与头注释，`e2e_test.ps1` 的 `$Setup` 文件名，全部由 `1.0.0.2` 对齐到 `1.0.0.3`；`docs/INDEX.md`、`docs/guides/guide-build-installer.md`、根 `README.md` 同步。**本批只改字符串与文档，未改源码、未重新编译两件 DLL、未跑装/卸回归** |
+| 生成 `1.0.0.3` 安装包 | `06_安装包\OBS美颜_CPU_v1.0.0.3.exe`，3,639,172 B，MD5 `aeba502f77246626282fa2154fc34b90`；`ProductVersion` / `FileVersion` 均为四段 `1.0.0.3`。包内四件：`obs-beauty.dll` 447,488 B / `88c54ecd56d8b643c01ded325c40e59b`，`obs-beauty-ui.dll` 218,624 B / `62076bfaba7c77c1218523120c9703c0`，`onnxruntime.dll` 11,569,696 B / `cd5e3b3eedbe6774b28d8fff9d0a3243`，`yunet.onnx` 232,589 B / `4ae92eeb150c82ce15ac80738b3b8167` |
+| 补齐 `1.0.0.3` 装机脚本（2026-11-07，方案 C 前半） | `03_装机\install_1.0.0.3.bat`：从 `install_1.0.0.1.bat` 复制，只改标题、`SRCDIR=%BUILDDIR%\build_1.0.0.3` 与一段路径差异注释；纯 ASCII、CRLF（133 行、非 ASCII 字节 0）。**该文件未在本会话运行过**；当前 ProgramData 已有同名四件套，脚本按设计会拒绝覆盖并退出 |
+
+**本批新发现的版本轴缺陷（未修，登记在案）**：`01_源码/beauty_core.cpp:1166` 的
+`CoreEngine::version()` 仍硬编码返回 `"1.0.0.2"`，而 `beauty_params.h:282` 的
+`BEAUTY_BUILD_STR` 已是 `1.0.0.3`；`obs-beauty.cpp:911` 会把该值拼进 init 日志，
+因此 `1.0.0.3` 滤镜打印的 `engine=core/` 版本号比滤镜版本低一档。这与 §1「引擎版本已并入 CPU 单轴」的口径冲突。
+打包时滤镜 DLL 里仍能搜到 `1.0.0.2` 就是这个残留造成的，来源已在 `build_setup.ps1` 自检处注明。
+**修复需要改源码并重编两件 DLL，属于修订位变更，本批不做**；修复前不得把 `engine=core/1.0.0.2` 当作版本号证据。
+
+**方案 C 前半的 e2e 阻断判定（2026-11-07 实测；第 2 项已由随后同日的 C-1 解决）**：`06_安装包\e2e_test.ps1` 的
+40 项断言**没有执行**，原因不是脚本缺失，而是三个可逐字核对的前置事实：
+
+1. **非提权**：`WindowsIdentity.GetCurrent()` 的 `IsInRole(<user>)` 为 `False`；
+   `C:\Program Files\obs-studio\obs-plugins\64bit` 的 ACL 对 `BUILTIN\Users` 只给
+   `ReadAndExecute`，`BUILTIN\<user>s` 才给 `FullControl`。安装包的
+   `RequestExecutionLevel admin` 在非提权令牌下需要 UAC 交互。
+2. **路径口径冲突**：`e2e_test.ps1` 的 `$OBSDIR` 写死
+   `C:\Program Files\obs-studio\obs-plugins\64bit\`（扁平布局，历史轴 3.1.39 口径）；
+   `install_1.0.0.3.bat` 与本机实际部署用
+   `C:\ProgramData\obs-studio\plugins\<插件目录名>\bin\64bit\`。实测 e2e 目标路径下
+   `obs-beauty.dll` 与 `onnxruntime.dll` 均 MISSING，只有 `models\yunet.onnx`
+   （`4ae92eeb…`）与 UI DLL（`62076bfa…`）在位；ProgramData 下四件齐全且 MD5 与本包一致。
+   脚本 §safety 只备份存在过的文件，因此 `$safetyMap` 缺 filter/ort 两键，
+   A2 / B1 / B2 里以「测试前机上已装文件 MD5」为基准的断言**必然 FAIL**，
+   跑出来的结果不能当作验收结论。
+3. **破坏性**：脚本 Phase A 会 `Remove-Item -Recurse -Force` 删除 `$MODELDIR` 与
+   `$UIDIR`，后者正是当前可用的 `obs-beauty-ui.dll` 所在目录；脚本只备份四个具名文件，
+   目录里的其他内容不会进 safety 区。
+
+**本轮没有改 `e2e_test.ps1` 的路径常量或断言基准**——那等于改判据，需用户明确裁定。
+用户随后选择 **C-1**：只统一装机口径、不改判据。登记见根 `README.md` §8 第 9 项与
+`docs/guides/guide-build-installer.md` §6 第 8 项。
+
+### `1.0.0.3` 装机口径统一批 — 2026-11-07 · 用户裁定 C-1（当前版第二次打包）
+
+| 变更 | 对读者的影响 |
+|---|---|
+| `obs-beauty.nsi` 的 `$OBSDIR` 改指 `%ProgramData%\obs-studio\plugins\obs-beauty\bin\64bit`；`.onInit` / `un.onInit` 不再从 OBS 根目录推导插件位置；SecCore 主动 `CreateDirectory "$OBSDIR"`；卸载新增 `obs-beauty` 插件目录链的 `RMDir` 清理 | 插件四件套装到 OBS 全局插件路径，目录名与 DLL 主名一致；`$OBSROOT` 现在只用于确认宿主 OBS 已安装。旧 SDK 清理改回历史路径，不会误删新目录下的东西 |
+| `e2e_test.ps1` 的 `$OBSDIR` 同步到 ProgramData | 四个 `$safetyMap` 键全部有值，A2 / B1 / B2 以「测试前机上已装文件 MD5」为基准的断言重新成立；**判据本身未改** |
+| `build_setup.ps1` 的 README.txt 四个安装路径、`$Installed` 对照表同步；顺手修正 `09_安装包` → `06_安装包` | 用户说明书与已装机文件比对不再指向废弃路径 |
+| `install_1.0.0.3.bat` 的 `KNOWN GAP` 注释改为 `RESOLVED`（C-1） | 脚本头不再宣称两条链路不一致 |
+| 重新打包（版本号仍 `1.0.0.3`） | 产物 3,638,687 B、MD5 `1c31531db60eee19130efc1fcc71ccf4`，`ProductVersion` / `FileVersion` 四段 `1.0.0.3`；当日第一次打包的同号 exe 已被覆盖作废 |
+
+**静态自洽核对（只读，不等于回归执行）**：`C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\` 下
+`obs-beauty.dll` / `onnxruntime.dll` / `models\yunet.onnx` 与面板 DLL 的 MD5 分别为
+`88c54ecd56d8b643c01ded325c40e59b` / `cd5e3b3eedbe6774b28d8fff9d0a3243` /
+`4ae92eeb150c82ce15ac80738b3b8167` / `62076bfaba7c77c1218523120c9703c0`，四件与本包逐一相同；
+`C:\Program Files\obs-beauty` 与两个注册表键均不存在，符合 Phase A 起点。
+
+**40 项装/卸断言已执行并通过（2026-11-07 16:56:22 → 16:56:31，用户手动复跑）**：
+用户完全关闭 OBS 后，以管理员身份打开独立 `-NoProfile` PowerShell 执行
+`powershell -NoProfile -ExecutionPolicy Bypass -File "D:\插件\OBS美颜源码\06_安装包\e2e_test.ps1"`。
+`%TEMP%\obsbeauty_test\log.txt` 实测：Phase A（新机模拟：删件 → `/S` 装 → `/S` 卸 → 归零）**25/25 PASS**，
+Phase B（升级覆盖：还原原文件 → 覆盖安装 → 卸载从备份还原）**15/15 PASS**，合计 **40/40 PASS、0 FAIL**，
+日志 `=== e2e end … : 0 failure(s) ===` 结束行、`done.flag` 已写。A2 读到的卸载注册表值为 `DisplayName` = `OBS美颜 CPU 版 1.0.0.3（纯 CPU 滤镜 + 参数面板）`、
+`DisplayVersion` = `1.0.0.3`、`EstimatedSize` = 12250 KB、`UninstallString` = `"C:\Program Files\obs-beauty\Uninstall_OBS美颜.exe"`。
+终态四件 MD5（`88c54ecd…` / `cd5e3b3e…` / `4ae92eeb…` / `62076bfa…`）与测试前逐一相同；
+`C:\Program Files\obs-beauty`、两个注册表键、开始菜单 `OBS美颜` 目录均不存在，OBS 未运行。
+此前登记的三项执行环境阻断（会话未提权且 `Start-Process -Verb RunAs` 被工具安全策略拦截、核查时 `obs64.exe` PID 3992 在运行、
+会话内 `Remove-Item` 被 safe-delete 函数包装）**在用户手动的管理员独立进程中均不复现**，属于会话环境限制而非脚本缺陷；
+该判定只改变「是否执行过」，不改变 C-1 的路径结论。
+**遗留**：历史扁平路径 `C:\Program Files\obs-studio\obs-plugins\64bit\models\yunet.onnx` 实测仍在（2026-11-07 16:57），
+不在本次 40 项判据内，本批未清理，见 `docs\guides\guide-build-installer.md` §6 第 10 项。验收日志已逐字归档到 `05_验证/e2e_install_20261107.md`。
+
+**版本号裁定未做**：本批改的是安装链路，两件 DLL 未重编，`BEAUTY_BUILD_STR` 仍 `1.0.0.3`；
+按四段式规则「修 bug → 修订位 +1」应为 `1.0.1.0`，按根 `README.md` §1 的项目惯例
+「普通升级第四位 +1」应为 `1.0.0.4`。两种口径都要求重编 DLL 与全链路同步，
+登记为根 `README.md` §8 第 10 项，**裁定前不得把两个同号 exe 当成同一产物**。
 
 **与旋转 −90° 的关系（另案更新）**：本次修的「换尺寸不重建掩码状态」与旋转问题的
 `updateMask` 只比像素总数是同族缺陷（宽高互换像素总数相同，尺寸检查放行陈旧状态）。

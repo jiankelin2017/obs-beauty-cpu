@@ -2,7 +2,7 @@
 #  build_setup.ps1 - 打包 "OBS美颜" 安装包 (NSIS 3)
 #
 #  做什么：
-#    1) 从 02_构建\build_1.0.0.2 取滤镜/面板 DLL（CPU 线独立产物目录），
+#    1) 从 02_构建\build_1.0.0.3 取滤镜/面板 DLL（CPU 线独立产物目录），
 #       从 05_验证 取 ONNX Runtime + YuNet
 #    2) 校验版本串（防止把旧构建打进包里 —— C13 坑 #1）
 #    3) 暂存到纯 ASCII 目录（NSIS 遇到中文源路径会报 no files found）
@@ -24,19 +24,19 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root      = Split-Path -Parent $ScriptDir
-# CPU 1.0.0.2 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
+# CPU 1.0.0.3 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
 # 绝不读 build_output（那里是 3.1.40，版本串自检会拦住但不必依赖它）。
 # 需要临时指向别处（例如验证构建）时设环境变量 BEAUTY_BUILD_OUT。
-$BuildOut  = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root '02_构建\build_1.0.0.2' }
+$BuildOut  = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root '02_构建\build_1.0.0.3' }
 $Nsi       = Join-Path $ScriptDir 'obs-beauty.nsi'
 $Makensis  = 'C:\Program Files (x86)\NSIS\makensis.exe'
 
 # CPU 四段版本轴（唯一口径见 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR）。
 # GPU 版是另一条独立轴（3.0.1，三段式），两条轴不可互比。
-$Ver = '1.0.0.2'
-$FilterVer = '1.0.0.2'
-$PanelVer  = '1.0.0.2'
-$CoreVer   = '1.0.0.2'
+$Ver = '1.0.0.3'
+$FilterVer = '1.0.0.3'
+$PanelVer  = '1.0.0.3'
+$CoreVer   = '1.0.0.3'
 
 function Fail($msg) { Write-Host "[build] ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Info($msg) { Write-Host "[build] $msg" }
@@ -75,10 +75,13 @@ function Assert-ContainsBytes([string]$path, [string]$needle) {
         Fail "$([System.IO.Path]::GetFileName($path)) does not contain '$needle' - it is a stale build"
     }
 }
-Assert-ContainsBytes $Src.filter '1.0.0.2'
-Assert-ContainsBytes $Src.panel  '1.0.0.2'
+# 注：滤镜 DLL 里仍会同时搜到 '1.0.0.2'，来源是 beauty_core.cpp 的
+# CoreEngine::version() 硬编码旧版本串（1.0.0.3 未同步），见 docs/CHANGELOG.md §2。
+# 该残留不影响本自检；自检只认 BEAUTY_BUILD_STR 对应的当前版本串。
+Assert-ContainsBytes $Src.filter '1.0.0.3'
+Assert-ContainsBytes $Src.panel  '1.0.0.3'
 Assert-ContainsBytes $Src.filter 'obs_beauty_filter'
-Info 'version strings OK (CPU 1.0.0.2 / obs_beauty_filter)'
+Info 'version strings OK (CPU 1.0.0.3 / obs_beauty_filter)'
 
 # ---------------------------------------------------------------- 暂存目录
 $Stage = Join-Path $env:TEMP 'obsbeauty_pkg'
@@ -100,9 +103,9 @@ $Md5Yunet  = Md5 (Join-Path $Stage 'core\models\yunet.onnx')
 
 # 和已装机文件对照：不一致只提示（这不是错误，装机版可能本来就是旧的）
 $Installed = @{
-    'filter\obs-beauty.dll'       = 'C:\Program Files\obs-studio\obs-plugins\64bit\obs-beauty.dll'
-    'core\onnxruntime.dll'        = 'C:\Program Files\obs-studio\obs-plugins\64bit\onnxruntime.dll'
-    'core\models\yunet.onnx'      = 'C:\Program Files\obs-studio\obs-plugins\64bit\models\yunet.onnx'
+    'filter\obs-beauty.dll'       = 'C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\obs-beauty.dll'
+    'core\onnxruntime.dll'        = 'C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\onnxruntime.dll'
+    'core\models\yunet.onnx'      = 'C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\models\yunet.onnx'
     'panel\obs-beauty-ui.dll'     = 'C:\ProgramData\obs-studio\plugins\obs-beauty-ui\bin\64bit\obs-beauty-ui.dll'
 }
 foreach ($rel in $Installed.Keys) {
@@ -123,10 +126,13 @@ OBS美颜 ${Ver}  ——  使用说明
 ----------------------------------------------------------------
 一共 4 个文件（外加本说明、md5 清单和卸载程序）：
 
-  滤镜    C:\Program Files\obs-studio\obs-plugins\64bit\obs-beauty.dll
-  运行时  C:\Program Files\obs-studio\obs-plugins\64bit\onnxruntime.dll
-  模型    C:\Program Files\obs-studio\obs-plugins\64bit\models\yunet.onnx
+  滤镜    C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\obs-beauty.dll
+  运行时  C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\onnxruntime.dll
+  模型    C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\models\yunet.onnx
   面板    C:\ProgramData\obs-studio\plugins\obs-beauty-ui\bin\64bit\obs-beauty-ui.dll
+
+  两个插件目录名（obs-beauty / obs-beauty-ui）必须与各自 DLL 主名一致，
+  且 DLL 必须在 bin\64bit\ 下；名字对不上 OBS 会静默跳过且不写日志。
 
   版本：滤镜 ${FilterVer} · 面板 ${PanelVer} · 引擎 ${CoreVer}
 
@@ -212,8 +218,8 @@ CoreEngine；机器上本来就有 obs-beauty\ SDK 目录的，装/卸都不会�
 六、文件清单
 ----------------------------------------------------------------
   本次打包时间：$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-  打包脚本    ：09_安装包\build_setup.ps1
-  安装脚本    ：09_安装包\obs-beauty.nsi
+  打包脚本    ：06_安装包\build_setup.ps1
+  安装脚本    ：06_安装包\obs-beauty.nsi
 "@
 
 $readmePath = Join-Path $Stage 'docs\README.txt'

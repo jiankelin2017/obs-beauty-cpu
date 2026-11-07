@@ -1,18 +1,28 @@
 ﻿; ============================================================================
-;  OBS美颜 CPU 版 安装包  v1.0.0.2  (NSIS 3 / Unicode)
+;  OBS美颜 CPU 版 安装包  v1.0.0.3  (NSIS 3 / Unicode)
 ;
 ;  装什么（4 个文件 + 文档 + 卸载器）：
-;    obs-beauty.dll      = 滤镜本体（CPU 版 1.0.0.2）
+;    obs-beauty.dll      = 滤镜本体（CPU 版 1.0.0.3）
 ;    onnxruntime.dll     = 自研引擎运行时（必须与滤镜 DLL 同目录）
 ;    models\yunet.onnx   = 人脸检测模型（必须落在 models\ 子目录）
 ;    obs-beauty-ui.dll   = 参数面板（ProgramData 下的插件目录）
 ;
-;  版本轴：CPU 线 1.0.0.2（四段式，见 01_源码\beauty_params.h），
+;  版本轴：CPU 线 1.0.0.3（四段式，见 01_源码\beauty_params.h），
 ;  与 GPU 版 3.0.1 独立，不可互比。引擎 core 已并入这条单轴。
+;
+;  装机口径（2026-11-07 按用户裁定 C-1 统一到 ProgramData）：
+;    $OBSDIR = %ProgramData%\obs-studio\plugins\obs-beauty\bin\64bit
+;                 放 obs-beauty.dll / onnxruntime.dll / models\yunet.onnx
+;    $UIDIR  = %ProgramData%\obs-studio\plugins\obs-beauty-ui\bin\64bit
+;                 放 obs-beauty-ui.dll
+;  旧口径 $OBSROOT\obs-plugins\64bit（扁平布局）已废弃：OBS 扫描全局插件时
+;  要求 <插件目录名>\bin\64bit\<同名>.dll，目录名与 DLL 主名必须一致，
+;  否则静默跳过且不写日志（见 docs/guides/guide-ui.md §3）。
+;  $OBSROOT 现在只用于确认宿主 OBS 已安装，不再作为插件写入目标。
 ;
 ;  为什么这几个位置不能改（见 04_文档\C13_装机链路.md §2）：
 ;    beauty_core.cpp 的 ensureReady() 用 selfDir()（= obs-beauty.dll 所在目录）
-;    解析 onnxruntime.dll 和 models\yunet.onnx。放到 obs-beauty\ 下面等于没装：
+;    解析 onnxruntime.dll 和 models\yunet.onnx。放到别处等于没装：
 ;    滤镜仍能加载，但人脸检测静默失效 → 磨皮退化成全帧。
 ;
 ;  不含 NamaSDK（约 97 MB 闭源件）：3.1.7 起默认引擎已切到 core，
@@ -49,19 +59,19 @@ SetDatablockOptimize on
 ; 「程序和功能」里留下两条重复项。
 !define APPID        "OBSBeauty.NamaBeauty"
 ; 版本号由 build_setup.ps1 用 /D 传进来 —— 只在一处维护。
-; CPU 线用四段式 1.0.0.2；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
+; CPU 线用四段式 1.0.0.3；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
 ; 手工编译（直接跑 makensis）时用下面这几个兜底值。
 !ifndef PKGVER
-  !define PKGVER     "1.0.0.2"
+  !define PKGVER     "1.0.0.3"
 !endif
 !ifndef FILTERVER
-  !define FILTERVER  "1.0.0.2"
+  !define FILTERVER  "1.0.0.3"
 !endif
 !ifndef PANELVER
-  !define PANELVER   "1.0.0.2"
+  !define PANELVER   "1.0.0.3"
 !endif
 !ifndef COREVER
-  !define COREVER    "1.0.0.2"
+  !define COREVER    "1.0.0.3"
 !endif
 !define PUBLISHER    "OBS Beauty (personal build)"
 !define ESTSIZE      12250            ; KB，控制面板里显示的大小（4 个文件约 12.2 MB）
@@ -100,8 +110,8 @@ SetDatablockOptimize on
 !define REGKEY       "Software\${APPID}"
 !define UNINSTKEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPID}"
 
-Var OBSROOT      ; OBS Studio 安装根目录（注册表里读，退回默认路径）
-Var OBSDIR       ; <OBS>\obs-plugins\64bit
+Var OBSROOT      ; OBS Studio 安装根目录（只用于确认宿主已装，不再是插件目标）
+Var OBSDIR       ; <ProgramData>\obs-studio\plugins\obs-beauty\bin\64bit（目录名须与 DLL 主名一致）
 Var PDIR         ; ProgramData
 Var UIDIR        ; <ProgramData>\obs-studio\plugins\obs-beauty-ui\bin\64bit
 
@@ -114,7 +124,7 @@ ShowInstDetails show
 ShowUninstDetails show
 BrandingText "${APPNAME} ${EDITION} ${PKGVER}  ·  滤镜 ${FILTERVER} + 面板 ${PANELVER} + 引擎 ${COREVER}"
 
-; PKGVER 已是四段式 1.0.0.2，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
+; PKGVER 已是四段式 1.0.0.3，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
 VIProductVersion "${PKGVER}"
 VIAddVersionKey /LANG=2052 "ProductName"     "${APPNAME} ${EDITION}"
 VIAddVersionKey /LANG=2052 "ProductVersion"  "${PKGVER}"
@@ -171,23 +181,20 @@ Function .onInit
     StrCpy $PDIR "C:\ProgramData"
   ${EndIf}
   StrCpy $UIDIR "$PDIR\obs-studio\plugins\obs-beauty-ui\bin\64bit"
+  StrCpy $OBSDIR "$PDIR\obs-studio\plugins\obs-beauty\bin\64bit"
 
-  ; OBS 根目录：OBS 自己把安装路径写在 HKLM\SOFTWARE\OBS Studio 的(默认)值里
+  ; OBS 根目录只用来确认宿主已安装；插件不再写 $OBSROOT\obs-plugins。
   ReadRegStr $OBSROOT HKLM "SOFTWARE\OBS Studio" ""
   ${If} $OBSROOT == ""
     StrCpy $OBSROOT "$PROGRAMFILES64\obs-studio"
   ${EndIf}
-  StrCpy $OBSDIR "$OBSROOT\obs-plugins\64bit"
 
   ${IfNot} ${FileExists} "$OBSROOT\bin\64bit\obs64.exe"
     MessageBox MB_ICONSTOP|MB_OK "没有找到 OBS Studio：$\r$\n$OBSROOT\bin\64bit\obs64.exe$\r$\n$\r$\n本安装包只能装进已安装的 OBS Studio（64 位）。$\r$\n请先装 OBS Studio 32.x，再运行本程序。$\r$\n$\r$\n现在什么都没改。" /SD IDOK
     Abort
   ${EndIf}
 
-  ${IfNot} ${FileExists} "$OBSDIR"
-    MessageBox MB_ICONSTOP|MB_OK "OBS 的插件目录不存在：$\r$\n$OBSDIR$\r$\n$\r$\nOBS 安装可能不完整。$\r$\n$\r$\n现在什么都没改。" /SD IDOK
-    Abort
-  ${EndIf}
+  ; 全局插件目录由本包自己创建（SetOutPath 会建），不要求预先存在。
 
   ; 已有安装则沿用旧目录（覆盖升级）
   ReadRegStr $0 HKLM "${REGKEY}" "InstallDir"
@@ -201,9 +208,10 @@ FunctionEnd
 ; ============================================================ 1. 滤镜 + 运行时
 Section "滤镜 + 自研引擎运行时" SecCore
   SectionIn RO
-  DetailPrint "目标 OBS 插件目录：$OBSDIR"
+  DetailPrint "目标全局插件目录：$OBSDIR"
 
   CreateDirectory "$INSTDIR\backup"
+  CreateDirectory "$OBSDIR"
   SetOutPath "$OBSDIR"
   SetOverwrite on
 
@@ -341,7 +349,8 @@ Function un.onInit
   ${If} $OBSROOT == ""
     StrCpy $OBSROOT "$PROGRAMFILES64\obs-studio"
   ${EndIf}
-  StrCpy $OBSDIR "$OBSROOT\obs-plugins\64bit"
+  ; 默认按当前口径推导；安装时写入的 ObsDir 优先（老包写的是历史路径，照它还原）。
+  StrCpy $OBSDIR "$PDIR\obs-studio\plugins\obs-beauty\bin\64bit"
   ReadRegStr $0 HKLM "${REGKEY}" "ObsDir"
   ${If} $0 != ""
     StrCpy $OBSDIR $0
@@ -417,14 +426,22 @@ Section "Uninstall"
   RMDir "$PDIR\obs-studio\plugins\obs-beauty-ui\bin"
   RMDir "$PDIR\obs-studio\plugins\obs-beauty-ui"
 
-  ; ---- 5) 老包（3.1.2 及更早）装过的 NamaSDK --------------------------------
+  ; ---- 4b) 本包新建的滤镜插件目录链（RMDir 只删空目录）--------------------
+  ; 目录名 obs-beauty 与 DLL 主名一致，是 OBS 全局插件扫描的硬性要求。
+  RMDir "$OBSDIR"
+  RMDir "$PDIR\obs-studio\plugins\obs-beauty\bin"
+  RMDir "$PDIR\obs-studio\plugins\obs-beauty"
+
+  ; ---- 5) 老包（3.1.2 及更早）装过的 SDK ----------------------------------
+  ; 老包装在历史路径 $OBSROOT\obs-plugins\64bit\obs-beauty\，不是当前 $OBSDIR。
   ; 只在旧包自己写了 SdkCreated=1 时才删：那是旧包装进去的，不是用户自己的东西。
+  StrCpy $1 "$OBSROOT\obs-plugins\64bit\obs-beauty"
   ReadRegDWORD $0 HKLM "${REGKEY}" "SdkCreated"
   ${If} $0 == "1"
-    RMDir /r "$OBSDIR\obs-beauty"
-    DetailPrint "已删除旧安装包装的 NamaSDK 运行时（obs-beauty\）"
-  ${ElseIf} ${FileExists} "$OBSDIR\obs-beauty"
-    DetailPrint "检测到 obs-beauty\ SDK 目录，但不是本包/旧包装的，保留不动"
+    RMDir /r "$1"
+    DetailPrint "已删除旧安装包装的 SDK 运行时（历史路径 obs-beauty\）"
+  ${ElseIf} ${FileExists} "$1"
+    DetailPrint "检测到历史路径的 SDK 目录，但不是本包/旧包装的，保留不动"
   ${EndIf}
 
   ; ---- 6) 面板窗口设置（可选）--------------------------------------------
