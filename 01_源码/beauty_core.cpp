@@ -1162,8 +1162,10 @@ public:
     const char* id() const override { return "core"; }
     // 1.4.0 → 1.4.1（3.1.40）：无脸帧改走逐字节透传，不再全帧兜底磨皮。
     // 门控语义变了 ⇒ 无脸帧的画面输出与 1.4.0 不同，旧的对拍数字不覆盖这条路径。
-    // 引擎版本并入 CPU 单轴（当前 1.0.0.2），不再维护独立的 core 1.4.x 号。
-    const char* version() const override { return "1.0.0.2"; }
+    // 引擎版本并入 CPU 单轴，不再维护独立的 core 1.4.x 号。
+    // 2026-11-07：改为引用 beauty_params.h 的唯一出处（经 beauty_core.h 引入），
+    // 根治「滤镜已是新版本、init 日志却打印 engine=core/<旧版本>」的失同步。
+    const char* version() const override { return BEAUTY_BUILD_STR; }
 
     bool ensureReady(std::string& err) override {
         // 人脸检测模型只试一次。失败不阻止引擎就绪 —— 降级为「无掩码，全帧磨皮」，

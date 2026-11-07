@@ -9,9 +9,9 @@ $T        = Join-Path $env:TEMP 'obsbeauty_test'
 $Log      = Join-Path $T 'log.txt'
 $Safety   = Join-Path $T 'safety'
 $Done     = Join-Path $T 'done.flag'
-$Setup    = Join-Path $PSScriptRoot 'OBS美颜_CPU_v1.0.0.3.exe'
+$Setup    = Join-Path $PSScriptRoot 'OBS美颜_CPU_v1.0.1.0.exe'
 
-# 2026-11-07 C-1：与 obs-beauty.nsi / install_1.0.0.3.bat 统一到 ProgramData 全局插件路径。
+# 2026-11-07 C-1：与 obs-beauty.nsi / install_1.0.1.0.bat 统一到 ProgramData 全局插件路径。
 # 目录名 obs-beauty 必须与 obs-beauty.dll 主名一致，否则 OBS 静默跳过。
 $OBSDIR   = 'C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit'
 $FILTER   = Join-Path $OBSDIR 'obs-beauty.dll'

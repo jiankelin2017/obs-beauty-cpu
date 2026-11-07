@@ -2,9 +2,9 @@
 
 | 字段 | 值 |
 |---|---|
-| 版本 | `1.0.0.3` |
+| 版本 | `1.0.1.0` |
 | 最后更新 | 2026-11-07 |
-| 适用代码版本 | CPU 线 `1.0.0.3`（提交 `1e35e8a`） |
+| 适用代码版本 | CPU 线 `1.0.1.0`（提交见 git log） |
 | 维护人 | 待人工确认 |
 | 状态 | `Active`（**第 4 批已完成；`04_文档/` tracked 待治理清零；第 6 项防腐化哨兵已落地；单独清理批已收口历史数字**） |
 | 替代文档 | 无（新建） |
@@ -33,9 +33,9 @@
 ```markdown
 | 字段 | 值 |
 |---|---|
-| 版本 | `1.0.0.3` |
+| 版本 | `1.0.1.0` |
 | 最后更新 | YYYY-MM-DD |
-| 适用代码版本 | CPU 线 `1.0.0.3` |
+| 适用代码版本 | CPU 线 `1.0.1.0` |
 | 维护人 | 待人工确认 |
 | 状态 | `Active` |
 | 替代文档 | 无（新建）／按 `主题-YYYYMMDD.md` 归档后填归档件路径 |
@@ -50,17 +50,17 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 
 | 主题 | 路径 | 类型 | 状态 | 适用版本 | 维护人 | 最后核对 | 替代/归档 |
 |---|---|---|---|---|---|---|---|
-| 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.0.3` | 待人工确认 | 2026-11-07 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md` |
-| 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.0.3` | 待人工确认 | 2026-11-07 | 替代 `docs/archive/changelog-raw-20261106.md` |
+| 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.1.0` | 待人工确认 | 2026-11-07 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md` |
+| 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active` | CPU `1.0.1.0` | 待人工确认 | 2026-11-07 | 替代 `docs/archive/changelog-raw-20261106.md` |
 | CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（架构 / 开关有效；历史轴数字未重测） | CPU `1.0.0.0`（当前版零历史实测数字） | 待人工确认 | 2026-11-06 | 重写前全文见 `docs/archive/c1-cpu-performance-20261106.md`；第 4B 批并入 `docs/archive/c10-async-detect-20261106.md`（§8）；单独清理批整篇重写、§8 编号不变 |
 | 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并且替代 `c02` / `c04` / `c07` / `c08` / `c15` 五篇归档件 |
 | 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c06` / `c09` / `c11`，引用 `c03` 与 `oss-survey` §8.4 |
 | 肤色掩码、人脸框与五官局部 | `docs/design/design-face-mask.md` | design | `Active`（数字未重测） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c03` / `c05` / `c12` / `c20` / `c21`，引用 `ab-mask` / `c02` / `c19` |
 | 画质对拍结论与证伪链 | `docs/design/design-quality-findings.md` | design | `Active`（**全部为历史轴结论，当前轴未重测**） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 第 4B 批新建；归并 `c14` / `c16` / `c17` / `c18` / `c19`，引用 `ab-metric` / `ab-smooth` / `c20` / `c21` |
-| 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.0.3` | 待人工确认 | 2026-11-07 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md` |
+| 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.1.0` | 待人工确认 | 2026-11-07 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md` |
 | 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` | guides | `Active`（装机状态待人工确认） | CPU `1.0.0.2` | 待人工确认 | 2026-11-06 | 原 `04_文档\顶层菜单插件说明.md`；未采用的 HTML+websocket 方案见 `docs/archive/ui-html-websocket-proposal-20261106.md` |
 | 许可与第三方组件口径 | `docs/reference/reference-licensing.md` | reference | `Active`（**口径冲突待人工确认，不含许可结论**） | CPU `1.0.0.0` | 待人工确认 | 2026-11-06 | 已合并 `docs/archive/opensource-boundary-20261106.md` 许可部分、`docs/archive/oss-survey-20261106.md` §4 |
-| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（第 4 批；2026-11-07 交付链路对齐批） | CPU `1.0.0.3` | 待人工确认 | 2026-11-07 | 无 |
+| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（第 4 批；2026-11-07 交付链路对齐批） | CPU `1.0.1.0` | 待人工确认 | 2026-11-07 | 无 |
 
 **当前版合计 11 篇**（README 1 · CHANGELOG 1 · design 5 · guides 2 · reference 1 · INDEX 1）。
 > 「适用版本」列记录的是**该文档最后一次内容复核时**的 CPU 轴版本，不是本表头的版本；
@@ -178,7 +178,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 > 治理输出第 6 项「防腐化机制」已落地为 `05_验证/check_docs.py`（`0.1.0`）与本节第 7 条双闸门，
 > 模板与规则固化在 §0。**未引入 git hook / CI**（不改变提交行为）；
 > 若以后公开仓库或多人协作需要强制拦截，再单独确认后升级为 `pre-commit` / GitHub Actions。
-> 新增脚本的 `0.1.0` 是脚本自身起始版本，**该批时 CPU 产品版本轴仍 `1.0.0.0`**（现已递增至 `1.0.0.3`），两者互不牵动。
+> 新增脚本的 `0.1.0` 是脚本自身起始版本，**该批时 CPU 产品版本轴仍 `1.0.0.0`**（现已递增至 `1.0.1.0`），两者互不牵动。
 
 ---
 
@@ -197,6 +197,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 2026-11-07 | `1.0.0.3` 装机脚本补齐批（方案 C 前半）：新增 `03_装机\install_1.0.0.3.bat`（纯 ASCII + CRLF，未运行）；`e2e_test.ps1` 因非提权、路径口径冲突与 Phase A 递归删除三重阻断而**未执行**，判定写入根 `README.md` §8 第 9 项、`docs/CHANGELOG.md` §2、`docs/guides/guide-build-installer.md` §4 / §6 第 4 / 8 项；同步根 `README.md` §2.3 / §4 / §9 与本表。归档件仍 35，未新增文档 |
 | 2026-11-07 | `1.0.0.3` 装机口径统一批（用户裁定 **C-1**）：`obs-beauty.nsi` / `e2e_test.ps1` / `build_setup.ps1` / `install_1.0.0.3.bat` 的插件目标路径统一到 `%ProgramData%\obs-studio\plugins\<插件目录名>\bin\64bit`；重新打包同号 exe（3,638,687 B / `1c31531db60eee19130efc1fcc71ccf4`），旧同号包作废；静态核对四件 MD5 与判据自洽。**40 项装/卸断言在该批时点因提权通道被拦、OBS 正在运行、safe-delete 包装器而未执行**（同日 16:56 由用户手动补跑通过，见下一行）；根 `README.md` §0 / §2 / §8 第 2 / 9 / 10 项 / §9、`docs/CHANGELOG.md` §1 / §2、`docs/guides/guide-build-installer.md` §0 / §4 / §5 / §6 第 1 / 4 / 8 / 9 项同步。归档件仍 35，未新增文档 |
 | 2026-11-07 | `1.0.0.3` 装卸回归验收批：用户关闭 OBS 后以管理员 PowerShell 独立进程执行 `06_安装包\e2e_test.ps1`，Phase A 25/25 + Phase B 15/15 = **40/40 PASS、0 FAIL**，`%TEMP%\obsbeauty_test\log.txt` 的 `0 failure(s)` 结束行、`done.flag` 已写，终态四件 MD5 与测试前一致；根 `README.md` §2.3 / §8 第 2 / 9 项 / §9、`docs\CHANGELOG.md` §1 / §2、`docs\guides\guide-build-installer.md` §5 / §6 第 4 / 8 / 10 项同步。**本批只做验收与文档同步，未改代码、未升版本号**。验收日志逐字归档到 `05_验证/e2e_install_20261107.md`（非 Active 文档，本表不登记）。归档件仍 35，未新增文档 |
+| 2026-11-07 | `1.0.1.0` 修订位升版批（用户裁定 **A**）：`beauty_params.h` / `beauty_core.cpp` / `obs-beauty-ui.cpp` 根治版本串并升到 `1.0.1.0`；原生 PowerShell 调 `cl.exe` 重编两件 DLL 到 `02_构建\build_1.0.1.0\`；打包链三份脚本与新增 `03_装机\install_1.0.1.0.bat` 同步；重打包 `OBS美颜_CPU_v1.0.1.0.exe`（3,637,954 B / `e0684330f8f3b79a98c6752d1b365793`）。根 `README.md`、`docs\CHANGELOG.md`（新增 `1.0.1.0` 独立章节）、本表 §0 / §1 / §5 / §6、`docs\guides\guide-build-installer.md` 同步。**新包装卸回归未跑**，登记为根 `README.md` §8 第 2 / 11 项。归档件仍 35，未新增文档 |
 
 ---
 

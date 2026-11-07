@@ -13,6 +13,7 @@
  * 注意：OBS 安装包不提供 obs-frontend-api.h，这里只声明用到的那一个函数。
  */
 
+#include "beauty_params.h"       /* 版本号唯一出处：与滤镜共用 BEAUTY_BUILD_STR */
 #include <windows.h>              /* GetCurrentThreadId: same numeric ID as filter plugin logs */
 #include <obs-module.h>
 #include <obs.h>
@@ -193,7 +194,7 @@ OBS_DECLARE_MODULE()
 #define BEAUTY_UI_CPU_EDITION 0
 #endif
 
-#define BEAUTY_UI_VERSION "1.0.0.3"   /* CPU 四段轴，口径见 beauty_params.h */
+#define BEAUTY_UI_VERSION BEAUTY_BUILD_STR   /* 2026-11-07：不再硬编码，直接取唯一出处 */
 
 /* ---- 前端 API：OBS 安装包不带 obs-frontend-api.h，按 ABI 直接声明 ---- */
 extern "C" {
@@ -1822,7 +1823,7 @@ static void ensure_menu(void)
 			QString::fromUtf8("OBS美颜 参数面板 v" BEAUTY_UI_VERSION "\n\n"
 #if BEAUTY_UI_CPU_EDITION
 					  "CPU 版：纯 CPU 实现，不依赖 GPU / D3D。\n"
-					  "版本轴 1.0.0.3（四段式）与 GPU 版 3.0.1 独立，不可互比。\n\n"
+					  "版本轴 " BEAUTY_UI_VERSION "（四段式）与 GPU 版 3.0.1 独立，不可互比。\n\n"
 #endif
 					  "把「OBS美颜」滤镜的参数面板挂到 OBS 顶层菜单。\n"
 					  "面板内容由滤镜自身的属性定义自动生成，\n"
