@@ -34,7 +34,7 @@
 | 纯 CPU 口径 | 不引入自定义 shader / hlsl / GPU 计算管线；`gs_*` 仅为 OBS 框架帧 I/O |
 
 **已完成（2026-11-07 16:56，属 `1.0.0.3` 包）**：`e2e_test.ps1` 的 40 项装/卸断言 **40/40 PASS、0 FAIL**（日志逐字归档在 `05_验证\e2e_install_20261107.md`）。**该结论不覆盖 `1.0.1.0`**：新版重编了两件 DLL，装卸回归待复跑。
-**尚未完成、不得当作已交付**：`1.0.1.0` 的 40 项装/卸回归复跑（前置前提见 §2，方案甲 / 乙需用户裁定）、少核机器与多人脸场景、1080p 与录制链路、L1 性能优化、L2 功能对齐。画质 golden A/B 复测已完成，但建议项未通过，不等于画质验收通过；遮挡闪烁的修复在合成遮挡序列上已真机跑通（不再崩溃、链路正常），**物理遮挡复现与观感判定仍待用户确认**。
+**尚未完成、不得当作已交付**：少核机器与多人脸场景、1080p 与录制链路、L1 性能优化、L2 功能对齐。`1.0.1.0` 的 40 项装/卸回归已于 2026-11-08 00:58 复跑通过（40 PASS / 0 FAIL，Phase A 25/25 + Phase B 15/15），该口径已从「尚未完成」移出，证据见 §2 与 `05_验证/e2e_install_20261108.md`。画质 golden A/B 复测已完成，但建议项未通过，不等于画质验收通过；遮挡闪烁的修复在合成遮挡序列上已真机跑通（不再崩溃、链路正常），**物理遮挡复现与观感判定仍待用户确认**。
 引擎层性能 A/B 前后对比与画质 golden A/B 复测均已于 2026-11-06 在本轴完成，判定见 §1.1 第二层；两项结论**不覆盖**少核机器与多人脸场景。
 详见根 `README.md` §8 与 `docs/guides/guide-build-installer.md` §6。
 
@@ -89,9 +89,17 @@
 | 面板 DLL | `02_构建\build_1.0.1.0\obs-beauty-ui.dll`，218,624 B，MD5 `ea79c0dca53d1e8e5ea08b958ad3fe40`，含 `[obs-beauty-ui][CPU]` / `beautyCpuTag`；`verify-ui-imports.py` 五项导入全部 OK |
 | 新包产物 | `06_安装包\OBS美颜_CPU_v1.0.1.0.exe`，3,637,954 B，MD5 `e0684330f8f3b79a98c6752d1b365793`，`ProductVersion` / `FileVersion` 四段 `1.0.1.0` |
 | 链路同步 | `build_setup.ps1`（取件目录 / 四个 `$*Ver` / 版本串自检 / 注释）、`obs-beauty.nsi`（兜底 define / 头注释）、`e2e_test.ps1`（`$Setup`）、新增 `03_装机\install_1.0.1.0.bat`；旧 `install_1.0.0.3.bat` 保留 |
-| 尚未完成 | `1.0.1.0` 的 40 项装卸回归未跑；少核机器与多人脸、1080p 与录制链路、物理遮挡观感、许可口径三处冲突、文档维护人字段仍待办 |
+| 尚未完成 | `1.0.1.0` 的 40 项装卸回归**已获有效验收**（2026-11-08 00:58 复跑 40 PASS / 0 FAIL，Phase A 25/25 + Phase B 15/15，日志归档 `05_验证/e2e_install_20261108.md`）；少核机器与多人脸、1080p 与录制链路、物理遮挡观感、许可口径三处冲突、文档维护人字段仍待办 |
 
-**复跑前提（必须先看）**：`e2e_test.ps1` 的 A2 / B1 用 `$safetyMap`（测试前机上已装四件 MD5）当判据。本机现装 `1.0.0.3` 四件，而新包里两件 DLL 的 MD5 已变，直接跑会出现多条 FAIL。**方案甲（推荐，不改判据）**：复跑前把 `build_1.0.1.0\` 的两件 DLL 覆盖到 ProgramData 对应位置，使本机与包一致；**方案乙（改判据）**：A2 / B1 改用「包内四件 MD5」作基准，`$safetyMap` 只留给 B2。方案乙改动测试判据，需用户明确裁定，**本批未改 `e2e_test.ps1` 的任何断言**。
+**复跑前提（必须先看）**：`e2e_test.ps1` 的 A2 / B1 用 `$safetyMap`（测试前机上已装四件 MD5）当判据。本机现装 `1.0.0.3` 四件，而新包里两件 DLL 的 MD5 已变，直接跑会出现多条 FAIL。**裁定（2026-11-08，用户选甲）**：不改任何断言，复跑前把 `build_1.0.1.0\` 的两件 DLL 覆盖到 ProgramData 对应位置，使本机与包一致；方案乙（A2 / B1 改用「包内四件 MD5」）已否决。**本批未改 `e2e_test.ps1` 的任何断言、未改动本机任何文件。**
+
+**2026-11-08 前置核查实测**：电量 99%、`obs64.exe` / `obs32.exe` 均未运行；机上四件仍为 `1.0.0.3`（`88c54ecd56d8b643c01ded325c40e59b` / `cd5e3b3eedbe6774b28d8fff9d0a3243` / `4ae92eeb150c82ce15ac80738b3b8167` / `62076bfaba7c77c1218523120c9703c0`），`02_构建\build_1.0.0.3\` 两件 DLL 的 MD5 与机上逐一相同，回滚源齐全；`05_验证\deps\runtime\onnxruntime.dll` 与 `05_验证\models\yunet.onnx` 的 MD5 与机上相同。**新坑（文件级 ACL）**：`C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\obs-beauty.dll` 与 `obs-beauty-ui\bin\64bit\obs-beauty-ui.dll` 的 ACL 均为 `SYSTEM` / `BUILTIN\<user>s` = `FullControl`、`BUILTIN\Users` = `ReadAndExecute, Synchronize`；父目录 ACL 另给 `BUILTIN\Users` 一个 `Write`，所以目录内新建探测文件成功、覆盖已有 DLL 却报 `UnauthorizedAccessException`。WorkBuddy 会话 `IsElevated=False`，本轮**覆盖未执行成功，本机零改动**；前置覆盖须与 `e2e_test.ps1` 在同一管理员进程连续执行。
+
+**2026-11-08 00:09 首次复跑实测（前置不满足的无效回归）**：用户运行 `e2e_test.ps1`，结果 **28 PASS / 12 FAIL**（Phase A 14/11、Phase B 14/1，`%TEMP%\obsbeauty_test\log.txt` 开头 00:09:28、结束行 00:09:38）。`safety` 备份的四件仍是 `1.0.0.3` 旧值（`88c54ecd…` / `cd5e3b3e…` / `4ae92eeb…` / `62076bfa…`），证明**前置覆盖未生效**；`A0 filter removed` / `A0 models dir removed` 也 FAIL，说明 Phase A 的删除动作没成功。12 条 FAIL 分三类：① 判据基准失配 3 条（A2 filter / A2 panel / B1 filter）；② `A0` 删除失败 2 条；③ 连带语义失效 7 条（`A2 ModelsCreated=1` 与 A3 六条删除断言）——models 目录没删掉，安装器判为「预先存在」并写 `ModelsCreated=0`，卸载器遂把旧四件当既有文件还原。**安装器本身表现正常**：两次 `setup exit code: 0`、`DisplayName` / `DisplayVersion` 均为 `1.0.1.0`，卸载后安装目录与两个 HKLM 键清空；终态四件与测试前逐位相同，无残留。**判定**：Phase A 已不再是「新机模拟」，本轮不得作为 `1.0.1.0` 的装卸验收结论。**裁定（2026-11-08，用户选方案一）**：不改任何仓库文件与断言，在管理员进程内依次做「提权自检 → 覆盖两件 DLL → 校验新 MD5 → 同进程调用 `e2e_test.ps1`」，复跑结果待回收。该次失败日志只留在 `%TEMP%`，因其为无效回归，不归档进 `05_验证\`。
+
+**2026-11-08 00:58 第二次复跑（方案一执行，有效验收）**：用户以提权封装 `%TEMP%\wb_rerun_e2e_1010.ps1` 在同一 High 完整性进程内依次完成「管理员自检 → OBS 进程自检 → 覆盖 `build_1.0.1.0\` 两件 DLL → 校验覆盖后 MD5 → `&` 调用 `e2e_test.ps1`」，`e2e_test.ps1` 的判据与断言一字未改。结果 **40 PASS / 0 FAIL**（Phase A 25/25、Phase B 15/15，`%TEMP%\obsbeauty_test\log.txt` 开头 00:58:46、结束行 00:58:55，`done.flag` 已写）。`safety` 备份的 filter 为 `e34117c88501956963c6c6f9370682d7`、panel 为 `ea79c0dca53d1e8e5ea08b958ad3fe40`，证明**前置覆盖生效**；`A0 filter removed` / `A0 models dir removed` 由 FAIL 转 PASS，**Phase A 恢复「新机模拟」语义**。安装器两次 `setup exit code: 0`、`DisplayName` / `DisplayVersion` 均为 `1.0.1.0`，卸载后安装目录与两个 HKLM 键清空；终态四件与本次测试前逐位相同，无残留。**判定**：本轮可作为 `1.0.1.0` 的装卸验收结论，日志逐字归档到 `05_验证/e2e_install_20261108.md`。**边界**：本次只验证静默安装/卸载的文件与注册表逻辑，图形界面未逐页截图核对，卸载后未启动 OBS 验证 `1.0.1.0` 能否加载出图——装卸通过不等于功能可用。**环境补充**：本机 UAC 为 `ConsentPromptBehaviorAdmin = 0`（提权不提示），当前账号属本机 <user>s 组但会话为 Medium 完整性；WorkBuddy 会话内 `Start-Process -Verb RunAs` 被工具安全策略拒绝（"spawns a child process that bypasses PowerShell command validation"），故提权那一步由用户通过桌面 `.cmd` 右键「以管理员身份运行」完成，agent 未代跑提权。
+
+**新坑（测试脚本缺前置自检）**：`e2e_test.ps1` 首行只写了「需要管理员权限运行」，但全文没有 `IsInRole` 提权自检（"e2e_test.ps1" l. 1–177）；`$ErrorActionPreference = 'Continue'`（"e2e_test.ps1" l. 6）会把前置 `Copy-Item` 的非终止错误静默带过，于是「覆盖没生效」与「脚本非提权」都不会在日志里留下显式报错。`A0` 一旦失败，Phase A 的「新机模拟」语义即失效，会连带污染后续 7 条断言。`A0` 删除失败的具体原因**未查证**（推测与脚本进程未提权有关）；直接回答「不知道」。
 
 **历史口径说明**：以下 `1.0.0.3` 及其之前的章节逐字保留，它们是当时版本的真实记录；本节之前的 §1 当前值表已切到 `1.0.1.0`。
 
