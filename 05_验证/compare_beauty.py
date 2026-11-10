@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Compare two OBS preview screenshots: ours vs the third-party beauty plugin.
+"""Compare two OBS preview screenshots: ours vs the reference beauty plugin.
 
 Uses the red selection frame to crop the video area, then reports skin-pixel
 statistics. Skin is detected with a YCbCr rule so that whitened pixels are not

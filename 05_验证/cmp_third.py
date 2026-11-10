@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""3.0.8（磨皮50+美白50）与第三方截图（磨皮50+美白50）的肤色区指标对比。"""
+"""3.0.8（磨皮50+美白50）与对照截图（磨皮50+美白50）的肤色区指标对比。"""
 import os, struct, sys
 sys.path.insert(0, os.path.abspath("."))
 import numpy as np
@@ -32,7 +32,7 @@ H, W, _ = th.shape
 box = np.zeros((H, W), bool); box[20:600, 340:860] = True     # 人脸大致范围，排除木柜
 mt = skin_mask(th) & box
 ys, xs = np.nonzero(mt)
-print("第三方：预览 %dx%d，肤色像素 %d，bbox x %d..%d (宽 %d) y %d..%d (高 %d)"
+print("对照实现：预览 %dx%d，肤色像素 %d，bbox x %d..%d (宽 %d) y %d..%d (高 %d)"
       % (W, H, mt.sum(), xs.min(), xs.max(), xs.max()-xs.min()+1, ys.min(), ys.max(), ys.max()-ys.min()+1))
 rt = bands(th, mt)
 
@@ -53,7 +53,7 @@ ro = bands(our, mo)
 
 print()
 print("%-10s %8s %8s %8s %8s %8s" % ("", "Y", "Cr", "高频std", "中频std", "低频std"))
-for name, r in (("第三方", rt), ("3.0.8", ro)):
+for name, r in (("对照实现", rt), ("3.0.8", ro)):
     print("%-10s %8.2f %8.2f %8.3f %8.3f %8.3f" % (name, r["Y"], r["Cr"], r["hf"], r["mid"], r["low"]))
 print("%-10s %8s %8s %8.2fx %8.2fx %8.2fx"
       % ("比值", "", "", ro["hf"]/rt["hf"], ro["mid"]/rt["mid"], ro["low"]/rt["low"]))

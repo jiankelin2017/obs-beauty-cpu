@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""归一到同一脸宽（400px）后，对比第三方与 3.0.8 的肤色区指标。"""
+"""归一到同一脸宽（400px）后，对比对照实现与 3.0.8 的肤色区指标。"""
 import os, struct, sys
 sys.path.insert(0, os.path.abspath("."))
 import numpy as np
@@ -60,8 +60,8 @@ ro = bands(on, mon)
 
 print("归一脸宽 %d px 后：" % FACE_W)
 print("%-10s %6s %8s %8s %8s %8s %8s" % ("", "像素", "Y", "Cr", "高频std", "中频std", "低频std"))
-for name, r in (("第三方", rt), ("3.0.8", ro)):
+for name, r in (("对照实现", rt), ("3.0.8", ro)):
     print("%-10s %6d %8.2f %8.2f %8.3f %8.3f %8.3f"
           % (name, r["n"], r["Y"], r["Cr"], r["hf"], r["mid"], r["low"]))
 print("%-10s %6s %8s %8s %7.2fx %7.2fx %7.2fx"
-      % ("3.0.8/第三方", "", "", "", ro["hf"]/rt["hf"], ro["mid"]/rt["mid"], ro["low"]/rt["low"]))
+      % ("3.0.8/对照实现", "", "", "", ro["hf"]/rt["hf"], ro["mid"]/rt["mid"], ro["low"]/rt["low"]))

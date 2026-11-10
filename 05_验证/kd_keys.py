@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""提取候选参数 key：第三方面板字符串 + Nama 经典参数名。"""
+"""提取候选参数 key：对照面板字符串 + Nama 经典参数名。"""
 import re
 import os
 

@@ -138,7 +138,7 @@ echo      [nama] init OK (v3.0.9 ...)
 echo      [nama] region ready (fuai skin seg, landmarks off, every frame)
 echo.
 echo    Please test with blur 50 + whiten 50 and compare skin tone
-echo    and face relief against the third-party camera. If the face
+echo    and face relief against the reference camera. If the face
 echo    still looks too pale, whiten can come down further.
 echo.
 

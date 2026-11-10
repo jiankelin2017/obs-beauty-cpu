@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""3.0.9（磨皮50+美白50）与第三方 2.4.2（磨皮50+美白50+锐化8）对比。
+"""3.0.9（磨皮50+美白50）与对照实现 2.4.2（磨皮50+美白50+锐化8）对比。
 
-脸宽不同（自制 255 px / 第三方 210 px），固定像素带宽会失真，
+脸宽不同（自制 255 px / 对照实现 210 px），固定像素带宽会失真，
 因此同时给三种口径：原生、归一到 210（只缩不放）、归一到 400。
 """
 import os
@@ -54,7 +54,7 @@ ao, at = load(OURS), load(THRD)
 mo, bo = region(ao, BOX_O); mt, bt = region(at, BOX_T)
 co, cmo = crop(ao, mo, BOX_O); ct, cmt = crop(at, mt, BOX_T)
 
-print("人脸宽度：自制 %d px，第三方 %d px（比 %.2f）\n"
+print("人脸宽度：自制 %d px，对照实现 %d px（比 %.2f）\n"
       % (bo[2]-bo[0], bt[2]-bt[0], (bo[2]-bo[0])/float(bt[2]-bt[0])))
 
 for label, fw in (("原生（不缩放）", None), ("归一到 210 px", 210), ("归一到 400 px", 400)):
@@ -68,7 +68,7 @@ for label, fw in (("原生（不缩放）", None), ("归一到 210 px", 210), ("
     print("[%s]" % label)
     print("  %-9s %6s %7s %7s %8s %8s %8s" % ("", "像素", "Y", "Cr", "高频", "中频", "低频"))
     print("  %-9s %6d %7.2f %7.2f %8.3f %8.3f %8.3f" % ("自制", ro["n"], ro["Y"], ro["Cr"], ro["hf"], ro["mid"], ro["low"]))
-    print("  %-9s %6d %7.2f %7.2f %8.3f %8.3f %8.3f" % ("第三方", rt["n"], rt["Y"], rt["Cr"], rt["hf"], rt["mid"], rt["low"]))
+    print("  %-9s %6d %7.2f %7.2f %8.3f %8.3f %8.3f" % ("对照实现", rt["n"], rt["Y"], rt["Cr"], rt["hf"], rt["mid"], rt["low"]))
     print("  %-9s %6s %+7.2f %+7.2f %7.2fx %7.2fx %7.2fx\n"
-          % ("自制/第三方", "", ro["Y"]-rt["Y"], ro["Cr"]-rt["Cr"],
+          % ("自制/对照实现", "", ro["Y"]-rt["Y"], ro["Cr"]-rt["Cr"],
              ro["hf"]/rt["hf"], ro["mid"]/rt["mid"], ro["low"]/rt["low"]))

@@ -153,7 +153,7 @@ echo    Start OBS and check Help - Log Files for:
 echo      [nama] init OK (v3.0.8 ...)
 echo      [nama] region ready (fuai skin seg, landmarks off, every frame)
 echo.
-echo    Please test with the same settings as the third-party camera:
+echo    Please test with the same settings as the reference camera:
 echo    blur 50 + whiten 50, and compare skin texture and face relief.
 echo.
 

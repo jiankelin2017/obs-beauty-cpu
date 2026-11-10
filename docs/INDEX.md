@@ -109,7 +109,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 装机验收 | `docs/archive/acceptance-installer-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/guides/guide-build-installer.md` |
 | 画质验收 | `docs/archive/acceptance-quality-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/CHANGELOG.md`、`README.md` §8 |
 | 边缘门控 | `docs/archive/c02-edge-gate-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-smoothing.md` |
-| 亮度对齐 | `docs/archive/c03-lumina-align-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-face-mask.md` |
+| 亮度对齐 | `docs/archive/c03-brightness-align-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-face-mask.md` |
 | 高低频分离 | `docs/archive/c04-highlow-freq-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-smoothing.md` |
 | 鲁棒性三项 | `docs/archive/c05-robustness-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-face-mask.md` |
 | 美白与红润 | `docs/archive/c06-whiten-ruddy-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-tone-detail.md` |
@@ -150,7 +150,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 以下内容**不移动、不登记、不入库**，`docs/` 体系对它们不成立：
 
 - `.gitignore` §10 排除的 `04_文档\` 下 **5 篇**旧文档（`.gitignore:182–186`）：
-  `01_第三方磨皮真值.md`、`C13_装机链路.md`、`C23_磨皮照抄施工图.md`、`一级入口说明.md`、`美颜子功能开发指南.md`；
+  文件名由隔离区自身维护，此处不逐字列举；
   以及 `参考文件\README.md`——仅本机查证用，**不移动、不归档、不登记为 `Pending`**。
 - `参考文件\` 全部子目录：闭源商业组件、参考分析、原始 `.raw` 帧数据、宿主源码树（无再分发权）。
 - `05_验证\` 下的测试素材位图、`.raw` 帧、加密 bundle、构建产物与可再生日志。

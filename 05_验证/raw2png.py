@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""raw RGBA -> PNG（无第三方依赖，纯 zlib + struct）。
+"""raw RGBA -> PNG（无对照实现依赖，纯 zlib + struct）。
 
 用法: python raw2png.py in.raw w h out.png
 """

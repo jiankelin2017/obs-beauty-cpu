@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """limit_knee_test.py —— 验证「阈值软膝」保护立体感
 
-原理（lumina 的 uSmoothThreshold）：
+原理（对照实现的 uSmoothThreshold）：
     |src - smoothed| 小 = 细纹理（毛孔、斑点）→ 该磨
     |src - smoothed| 大 = 明暗交界（鼻梁侧、下颌线）→ 不该磨
 

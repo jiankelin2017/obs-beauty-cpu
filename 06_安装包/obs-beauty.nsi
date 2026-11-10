@@ -138,7 +138,7 @@ VIAddVersionKey /LANG=2052 "ProductVersion"  "${PKGVER}"
 VIAddVersionKey /LANG=2052 "FileDescription" "${APPNAME} ${EDITION} 安装程序（纯 CPU，不依赖 GPU）"
 VIAddVersionKey /LANG=2052 "FileVersion"     "${PKGVER}"
 VIAddVersionKey /LANG=2052 "CompanyName"     "${PUBLISHER}"
-VIAddVersionKey /LANG=2052 "LegalCopyright"  "仅供自用；第三方组件版权归各自原作者"
+VIAddVersionKey /LANG=2052 "LegalCopyright"  "仅供自用"
 
 ; ------------------------------------------------------------------ 界面
 !define MUI_ABORTWARNING
