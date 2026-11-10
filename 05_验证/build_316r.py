@@ -57,33 +57,21 @@ def build():
 
     bat = os.path.join(WORK, 'build316r.bat')
     io.open(bat, 'w', encoding='ascii', newline='').write(
-        '@echo off
-'
-        'setlocal
-'
-        'set VSBASE=C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231
-'
-        'set SDKBASE=C:\Program Files (x86)\Windows Kits\10
-'
-        'set SDKVER=10.0.26100.0
-'
-        'set PATH=%VSBASE%\bin\Hostx64\x64;%PATH%
-'
-        'set INCLUDE=%VSBASE%\include;%SDKBASE%\Include\%SDKVER%\ucrt;%SDKBASE%\Include\%SDKVER%\um;%SDKBASE%\Include\%SDKVER%\shared;%SDKBASE%\Include\%SDKVER%\winrt
-'
-        'set LIB=%VSBASE%\lib\x64;%SDKBASE%\Lib\%SDKVER%\ucrt\x64;%SDKBASE%\Lib\%SDKVER%\um\x64
-'
-        'cd /d "%~dp0"
-'
+        '@echo off\n'
+        'setlocal\n'
+        'set VSBASE=C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.51.36231\n'
+        'set SDKBASE=C:\\Program Files (x86)\\Windows Kits\\10\n'
+        'set SDKVER=10.0.26100.0\n'
+        'set PATH=%VSBASE%\\bin\\Hostx64\\x64;%PATH%\n'
+        'set INCLUDE=%VSBASE%\\include;%SDKBASE%\\Include\\%SDKVER%\\ucrt;%SDKBASE%\\Include\\%SDKVER%\\um;%SDKBASE%\\Include\\%SDKVER%\\shared;%SDKBASE%\\Include\\%SDKVER%\\winrt\n'
+        'set LIB=%VSBASE%\\lib\\x64;%SDKBASE%\\Lib\\%SDKVER%\\ucrt\\x64;%SDKBASE%\\Lib\\%SDKVER%\\um\\x64\n'
+        'cd /d "%~dp0"\n'
         'cl /nologo /LD /O2 /EHsc /std:c++17 /W3 /utf-8 /D_CRT_SECURE_NO_WARNINGS '
-        '/Fe:C:\legacy_e2e\legacy_engine_test_316r.dll '
+        '/Fe:C:\\legacy_e2e\\legacy_engine_test_316r.dll '
         'legacy_engine.cpp legacy_region.cpp beauty_log.cpp '
-        'opengl32.lib gdi32.lib user32.lib
-'
-        'if errorlevel 1 (echo [316r] FAILED & exit /b 1)
-'
-        'echo [316r] OK
-')
+        'opengl32.lib gdi32.lib user32.lib\n'
+        'if errorlevel 1 (echo [316r] FAILED & exit /b 1)\n'
+        'echo [316r] OK\n')
     r = subprocess.run(['cmd', '/c', bat], cwd=WORK, capture_output=True, text=True)
     out = os.path.join(HERE, 'legacy_engine_test_316r.dll')
     ok = os.path.exists(out)
