@@ -9,7 +9,7 @@
 | 状态 | `Active`（1.0.13.12 修 D1/D2 源码缺陷、已重新编译打包；2026-11-09 精简批删分批记录与变更记录；同日治理批新建 `design-head-roll.md`、CHANGELOG §2 压至最近五版、补 `05_验证/INDEX.md`；**2026-11-10 重建 `docs/archive/` 并完成来源段落清理**） |
 | 替代文档 | 无（新建） |
 
-> **归档说明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件保留，文首均保留「ARCHIVED · 已废弃，见 xxx」标注。
+> **归档说明（2026-11-10）**：`docs/archive/` 下 39 篇历史原件保留，文首均保留「ARCHIVED · 已废弃，见 xxx」标注。
 > 它们全部标 `Deprecated`、**不得据此施工**；本仓库的当前有效结论只在 §1 的 Active 文档留存一份。
 > 按 2026-11-10 清理裁定，归档件已移除来源段落，**正文不再是逐字原件**，原 MD5 基线随之作废。
 > 结论唯一去向索引见 `docs/reference/reference-conclusions.md`；仓库外冷备保留于 `D://插件//_整理_20261110//before//`。
@@ -37,7 +37,7 @@
 
 ```text
 ACTIVE  = README.md + docs/CHANGELOG.md + docs/INDEX.md + docs/{design,guides,reference,adr}/*.md   # 13 篇：受文档头 / INDEX 双向 / 断链 / 命名 / 版本轴等断言约束
-ARCHIVE = docs/archive/*.md（38 篇，全部 Deprecated，文首有 ARCHIVED 标注）                       # 受第 2 / 3 / 5 条断言约束
+ARCHIVE = docs/archive/*.md（39 篇，全部 Deprecated，文首有 ARCHIVED 标注）                       # 受第 2 / 3 / 5 条断言约束
 VERIFY  = 05_验证/*.md（顶层 20 篇；递归共 85 篇）                                                      # 其路径引用受第 8 条零断链校验
 OUTSIDE = 05_验证/goldens/ · 参考文件/ · _quarantine/ · 仓库外报告                                       # 不受 Active 头表约束
 ```
@@ -66,7 +66,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 主题 | 路径 | 类型 | 状态 | 适用版本 | 维护人 | 最后核对 | 替代/归档 |
 |---|---|---|---|---|---|---|---|
 | 项目总入口（唯一 README） | `README.md` | README | `Active` | CPU `1.0.14.0` | Jian | 2026-11-10 | 替代 `docs/archive/readme-archive-20261106.md`、`docs/archive/readme-entry-20261106.md`（均 `Deprecated`） |
-| 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active`（**§2 只留最近五版**） | CPU `1.0.14.0` | Jian | 2026-11-10 | 替代 `docs/archive/changelog-raw-20261106.md`；`1.0.13.7` 及更早原文 → `docs/archive/changelog-history-20261109.md`（均 `Deprecated`） |
+| 变更日志（全局唯一） | `docs/CHANGELOG.md` | CHANGELOG | `Active`（**§2 为速查表**） | CPU `1.0.14.0` | Jian | 2026-11-10 | 替代 `docs/archive/changelog-raw-20261106.md`；`1.0.13.7` 及更早原文 → `docs/archive/changelog-history-20261109.md`（均 `Deprecated`） |
 | CPU 性能优化设计依据 | `docs/design/design-cpu-performance.md` | design | `Active`（架构 / 开关有效；历史轴数字未重测） | CPU `1.0.13.0` | Jian | 2026-11-09 | 重写前全文见 `docs/archive/c1-cpu-performance-20261106.md`；第 4B 批并入 `docs/archive/c10-async-detect-20261106.md`（§8）；单独清理批整篇重写、§8 编号不变 |
 | 磨皮：高低频分离与低频层路线 | `docs/design/design-smoothing.md` | design | `Active`（数字未重测） | CPU `1.0.0.0` | Jian | 2026-11-06 | 第 4B 批新建；归并且替代 `c02` / `c04` / `c07` / `c08` / `c15` 五篇归档件（见 §2） |
 | 色调、clarity 与锐化 | `docs/design/design-tone-detail.md` | design | `Active`（数字未重测） | CPU `1.0.2.0` | Jian | 2026-11-08 | 第 4B 批新建；归并 `c06` / `c09` / `c11`，引用 `c03` 与 `oss-survey` §8.4；`1.0.2.0` 补 §1.1「色调三段整帧施加」 |
@@ -75,8 +75,8 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 头歪与旋转源：方向 / 倾斜 / 脖子 / roll 锁定 | `docs/design/design-head-roll.md` | design | `Active`（判据有效；定量只在取证文件） | CPU `1.0.13.10` | Jian | 2026-11-09 | **2026-11-09 新建**：吸收 `design-face-mask.md` 原 §13–§15，并补 `1.0.13.7`–`1.0.13.9` 的 roll 释放链（原只在 `docs/CHANGELOG.md` §2）；取证见 `05_验证/ab20261109_head_roll.md` 等 |
 | 安装包构建与打包 | `docs/guides/guide-build-installer.md` | guides | `Active`（偏差见 §6） | CPU `1.0.14.0` | Jian | 2026-11-10 | 原 `06_安装包\README_打包说明.md`；验收原件 `docs/archive/acceptance-installer-20261106.md`（`Deprecated`） |
 | 顶层菜单与参数面板（UI） | `docs/guides/guide-ui.md` | guides | `Active` | CPU `1.0.14.0` | Jian | 2026-11-10 | 原 `04_文档\顶层菜单插件说明.md`（已隔离）；未采用的 HTML+websocket 方案见 `docs/archive/ui-html-websocket-proposal-20261106.md`（`Deprecated`） |
-| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（2026-11-10：重建 `docs/archive/` 38 行归档登记） | CPU `1.0.14.0` | Jian | 2026-11-10 | 分批过程 → `docs/archive/index-batchlog-20261109.md`（`Deprecated`） |
-| 历史结论唯一留存索引 | `docs/reference/reference-conclusions.md` | reference | `Active` | CPU `1.0.14.0` | Jian | 2026-11-10 | 索引 `docs/archive/` 38 篇的有效结论去向；归档件本体见 §2 |
+| 文档总表 | `docs/INDEX.md` | INDEX | `Active`（2026-11-10：重建 `docs/archive/` 39 行归档登记） | CPU `1.0.14.0` | Jian | 2026-11-10 | 分批过程 → `docs/archive/index-batchlog-20261109.md`（`Deprecated`） |
+| 历史结论唯一留存索引 | `docs/reference/reference-conclusions.md` | reference | `Active` | CPU `1.0.14.0` | Jian | 2026-11-10 | 索引 `docs/archive/` 39 篇的有效结论去向；归档件本体见 §2 |
 
 **当前版合计 12 篇**（README 1 · CHANGELOG 1 · design 6 · guides 2 · reference 1 · INDEX 1）。
 > 「适用版本」列记录的是**该文档最后一次内容复核时**的 CPU 轴版本，不是本表头的版本。
@@ -93,9 +93,9 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 
 ---
 
-## 2. 归档登记（Deprecated · 38 篇）
+## 2. 归档登记（Deprecated · 39 篇）
 
-**结论先行**：`docs/archive/` 下 38 篇历史原件保留并纳入版本库。每篇文首保留「ARCHIVED · 已废弃，见 xxx」标注，
+**结论先行**：`docs/archive/` 下 39 篇历史原件保留并纳入版本库。每篇文首保留「ARCHIVED · 已废弃，见 xxx」标注，
 状态一律 `Deprecated`、**不得据此施工**。按 2026-11-10 清理裁定，归档件已移除来源段落，
 **正文不再是逐字原件**；有效结论只在 §1 的 Active 文档留存一份，
 小节级去向索引见 `docs/reference/reference-conclusions.md`。
@@ -130,6 +130,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 自适应肤色中心 | `docs/archive/c21-adaptive-skin-center-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/design/design-face-mask.md` |
 | CHANGELOG 历史轴全文 | `docs/archive/changelog-history-20261109.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/CHANGELOG.md` |
 | 性能变更流水 | `docs/archive/changelog-perf-20261109.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/CHANGELOG.md` |
+| 修复流水（`1.0.13.8`~`1.0.13.12`） | `docs/archive/changelog-fix-20261110.md` | archive | `Deprecated` | CPU `1.0.13.8`~`1.0.13.12` | Jian | 2026-11-10 | `docs/CHANGELOG.md` §2 |
 | 逐提交流水账 | `docs/archive/changelog-raw-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/CHANGELOG.md` |
 | GPU 移植计划（未采用） | `docs/archive/gpu-porting-plan-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `README.md` §1、§3 |
 | 分批治理过程记录 | `docs/archive/index-batchlog-20261109.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/INDEX.md` |
@@ -141,7 +142,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 | 技术路线图 | `docs/archive/tech-roadmap-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `README.md` §0、§3 |
 | HTML+websocket UI 提案（未采用） | `docs/archive/ui-html-websocket-proposal-20261106.md` | archive | `Deprecated` | 历史轴 | Jian | 2026-11-10 | `docs/guides/guide-ui.md` |
 
-**本节登记 38 行**，与 `docs/archive/` 实际文件一一对应；`check_docs.py` 第 3 条断言据此做双向登记校验。
+**本节登记 39 行**，与 `docs/archive/` 实际文件一一对应；`check_docs.py` 第 3 条断言据此做双向登记校验。
 
 ---
 
@@ -156,7 +157,7 @@ guides 需有可执行步骤与已知偏差；reference 只登记逐字可核对
 - `05_验证\` 下的测试素材位图、`.raw` 帧、加密 bundle、构建产物与可再生日志。
 - `.gitignore` 是**唯一排除闸门**；新增文件默认会被上传，先加规则再 `git add`。提交前跑 `python 05_验证\check_upload.py --staged`。
 
-> **与 §2 的边界（2026-11-10 裁定）**：`docs/archive/` 38 篇**不在**本节排除清单内，已按用户裁定纳入版本库。
+> **与 §2 的边界（2026-11-10 裁定）**：`docs/archive/` 39 篇**不在**本节排除清单内，已按用户裁定纳入版本库。
 > 它们与 `04_文档\` 5 篇的区别是：前者是本仓库自产的历史文档，后者含闭源商业组件的参考实现内部细节。
 > 若后续要把归档件改为「仅本机留存」，须先改 `.gitignore` 并同步本表，不能只删文件。
 
