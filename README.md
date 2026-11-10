@@ -353,6 +353,13 @@ obs-beauty-ui.dll · 顶层菜单「美颜·CPU(&A)」（仅 CPU 宏开启时）
 | `04_文档/顶层菜单插件说明.md` | `docs/guides/guide-ui.md` |
 | `04_文档/CHANGELOG_提交记录.md` | 里程碑提炼进 `docs/CHANGELOG.md` |
 
+## 10. 许可证
+
+本项目以 **GNU General Public License v2.0** 发布，全文见根目录 [`LICENSE`](LICENSE)。
+
+采用 GPL-2.0 的原因：可执行文件链接 OBS Studio 的 `libobs`（GPL-2.0），
+分发衍生作品须以同一许可提供。源码全量位于 `01_源码\`，构建脚本位于 `02_构建\`、`06_安装包\`。
+
 ---
 
 *本文只描述 CPU `1.0.14.0` 当前有效结论。历史细节、评分口径、版本演进史见 §9 所列归档件；

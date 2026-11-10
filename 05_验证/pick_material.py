@@ -48,7 +48,7 @@ SCORE_THR = 0.6       # 置信度门限，与插件一致
 def ascii_model_copy():
     """OpenCV 的 ONNX importer 走 fopen，遇到中文路径会报 Can't read ONNX file。
 
-    项目目录正好叫「D:\\插件\\OBS美颜」，所以先把模型拷到纯 ASCII 的临时目录。
+    项目目录可能含中文，所以先把模型拷到纯 ASCII 的临时目录。
     """
     try:
         MODEL.encode("ascii")
