@@ -1,0 +1,226 @@
+diff --git a/01_源码/beauty_smooth.cpp b/01_源码/beauty_smooth.cpp
+index 2d32898..b8c1c60 100644
+--- a/01_源码/beauty_smooth.cpp
++++ b/01_源码/beauty_smooth.cpp
+@@ -1090,12 +1090,12 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+                      std::vector<float>& scratch) {
+     if (!src || !dst || w <= 0 || h <= 0 || roi.empty()) return;
+ 
+-    int ww = w, wh = h;
+-    if (p.halfRes) {
+-        ww = (w + 1) / 2;
+-        wh = (h + 1) / 2;
+-        if (ww < 8 || wh < 8) { ww = w; wh = h; }
+-    }
++    // ---- 处理分辨率（按**整帧**口径算）----------------------------------
++    // bandBoxW 是按**平面宽度**归一化的：半径必须用整帧平面宽度算。若改用裁剪后
++    // 的宽度，半径会随裁剪框缩小，画面就和整帧路径对不上。
++    const bool half = p.halfRes && (((w + 1) / 2) >= 8) && (((h + 1) / 2) >= 8);
++    const int ww = half ? ((w + 1) / 2) : w;
++    const int wh = half ? ((h + 1) / 2) : h;
+ 
+     const int w1 = bandBoxW(ww, p.f1, 3);
+     int       w2 = bandBoxW(ww, p.f2, 5);
+@@ -1106,7 +1106,41 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+     const int ra = (wa - 1) / 2;
+     const int nPass = (p.passes < 1) ? 1 : ((p.passes > 6) ? 6 : p.passes);
+ 
+-    const size_t np = (size_t)ww * (size_t)wh;
++    // ---- ROI 裁剪（1.0.4.0）---------------------------------------------
++    // 本函数此前只把 roi 拿去判空，整帧照算 —— 生产路径（s3Band=1，3.1.17 起的
++    // 默认）因此拿不到任何 ROI 收益：实测 1080p 上「ROI / 全帧」= 0.98~1.10
++    // （等于没省），而旧路径（s3Band=0）是 0.33~0.53。这里按 roi 外扩后裁剪，
++    // 只算这一块。
++    //
++    // 外扩量必须覆盖三组盒式的累积扩散：B1(r1) + B2(r2) + amp(ra)，各 nPass 趟。
++    // 半分辨率下这些半径按一半计，故再乘 2。+2 是 clamp 边界与双线性取样的余量
++    // （同 boxRgbRoi 的理由）。起点**下对齐到 32 的倍数**（平面坐标），让裁剪版与
++    // 整帧版的重算点落在同一批全局坐标上，浮点累加相位一致 —— 不对齐实测会差
++    // 出 1 个灰阶，真机就是掩码边缘一圈接缝。
++    const int reach = nPass * (r1 + r2 + ra) + 2;
++    const int pad = half ? (reach * 2 + 4) : (reach + 2);
++    int cx0 = roi.x0 - pad, cy0 = roi.y0 - pad;
++    int cx1 = roi.x1 + pad, cy1 = roi.y1 + pad;
++    if (cx0 < 0) cx0 = 0;
++    if (cy0 < 0) cy0 = 0;
++    if (cx1 > w) cx1 = w;
++    if (cy1 > h) cy1 = h;
++    if (half) {
++        cx0 &= ~63; cy0 &= ~63;             // 平面坐标对齐 32 → 全分辨率对齐 64
++    } else {
++        cx0 = alignDown32(cx0);
++        cy0 = alignDown32(cy0);
++    }
++    if (cx1 <= cx0 || cy1 <= cy0) return;
++
++    const int cw = cx1 - cx0;
++    const int ch = cy1 - cy0;
++    const int pww = half ? ((cw + 1) / 2) : cw;   // 裁剪后的平面宽高
++    const int pwh = half ? ((ch + 1) / 2) : ch;
++    const int gpx = half ? (cx0 / 2) : cx0;       // 平面原点（全局平面坐标）
++    const int gpy = half ? (cy0 / 2) : cy0;
++
++    const size_t np = (size_t)pww * (size_t)pwh;
+     // 平面：src(3) + b1(3) + b2(3) + amp(1) + tmp(3) = 13，留 16
+     if (scratch.size() < np * 16) scratch.resize(np * 16);
+     float* sr  = &scratch[0];
+@@ -1133,37 +1167,38 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+     const float inv255 = 1.0f / 255.0f;
+ 
+     // ---- 下采样到处理分辨率（2×2 盒式，与 25 tap 路径同口径【推断】）------
+-    if (ww == w && wh == h) {
+-        runRange(0, h, threads, [&](int yBegin, int yEnd) {
+-            for (int y = yBegin; y < yEnd; y++) {
++    if (!half) {
++        runRange(0, ch, threads, [&](int yBegin, int yEnd) {
++            for (int ly = yBegin; ly < yEnd; ly++) {
++                const int y = cy0 + ly;
+                 const unsigned char* row = src + (size_t)y * (size_t)w * 4;
+-                const size_t o = (size_t)y * (size_t)w;
+-                for (int x = 0; x < w; x++) {
+-                    const size_t q = (size_t)x * 4;
+-                    sr[o + x] = (float)row[q + 0];
+-                    sg[o + x] = (float)row[q + 1];
+-                    sb[o + x] = (float)row[q + 2];
++                const size_t o = (size_t)ly * (size_t)pww;
++                for (int lx = 0; lx < pww; lx++) {
++                    const size_t q = (size_t)(cx0 + lx) * 4;
++                    sr[o + lx] = (float)row[q + 0];
++                    sg[o + lx] = (float)row[q + 1];
++                    sb[o + lx] = (float)row[q + 2];
+                 }
+             }
+         });
+     } else {
+-        runRange(0, wh, threads, [&](int yBegin, int yEnd) {
+-            for (int y = yBegin; y < yEnd; y++) {
+-                const int y0 = y * 2;
++        runRange(0, pwh, threads, [&](int yBegin, int yEnd) {
++            for (int ly = yBegin; ly < yEnd; ly++) {
++                const int y0 = cy0 + ly * 2;
+                 const int y1 = (y0 + 1 < h) ? (y0 + 1) : y0;
+-                const unsigned char* r0 = src + (size_t)y0 * (size_t)w * 4;
+-                const unsigned char* r1 = src + (size_t)y1 * (size_t)w * 4;
+-                const size_t o = (size_t)y * (size_t)ww;
+-                for (int x = 0; x < ww; x++) {
+-                    const int x0 = x * 2;
++                const unsigned char* pr0 = src + (size_t)y0 * (size_t)w * 4;
++                const unsigned char* pr1 = src + (size_t)y1 * (size_t)w * 4;
++                const size_t o = (size_t)ly * (size_t)pww;
++                for (int lx = 0; lx < pww; lx++) {
++                    const int x0 = cx0 + lx * 2;
+                     const int x1 = (x0 + 1 < w) ? (x0 + 1) : x0;
+                     const size_t i0 = (size_t)x0 * 4;
+                     const size_t i1 = (size_t)x1 * 4;
+-                    sr[o + x] = (float)(r0[i0] + r0[i1] + r1[i0] + r1[i1]) * 0.25f;
+-                    sg[o + x] = (float)(r0[i0 + 1] + r0[i1 + 1]
+-                                      + r1[i0 + 1] + r1[i1 + 1]) * 0.25f;
+-                    sb[o + x] = (float)(r0[i0 + 2] + r0[i1 + 2]
+-                                      + r1[i0 + 2] + r1[i1 + 2]) * 0.25f;
++                    sr[o + lx] = (float)(pr0[i0] + pr0[i1] + pr1[i0] + pr1[i1]) * 0.25f;
++                    sg[o + lx] = (float)(pr0[i0 + 1] + pr0[i1 + 1]
++                                       + pr1[i0 + 1] + pr1[i1 + 1]) * 0.25f;
++                    sb[o + lx] = (float)(pr0[i0 + 2] + pr0[i1 + 2]
++                                       + pr1[i0 + 2] + pr1[i1 + 2]) * 0.25f;
+                 }
+             }
+         });
+@@ -1172,26 +1207,26 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+     // ---- B1 = 窄模糊，B2 = 宽模糊（两个不同尺度，这是 §11.5 的核心）------
+     // 先把 src 拷进累加器再迭代（bandBoxN 的 acc 初值必须是 src）。
+     for (int k = 0; k < 3; k++) memcpy(b1p[k], srcp[k], np * sizeof(float));
+-    bandBoxN(b1p, tmpp, 3, ww, wh, r1, nPass, bt);
++    bandBoxN(b1p, tmpp, 3, pww, pwh, r1, nPass, bt);
+ 
+     for (int k = 0; k < 3; k++) memcpy(b2p[k], srcp[k], np * sizeof(float));
+-    bandBoxN(b2p, tmpp, 3, ww, wh, r2, nPass, bt);
++    bandBoxN(b2p, tmpp, 3, pww, pwh, r2, nPass, bt);
+ 
+     // ---- 振幅代理 a = blur(|C.g − B2.g|)，只测绿通道（同 §3.1 ③）---------
+     // 为什么用 |C−B2| 而不是 |B2−B1|：后者在高频处两者都≈0，相减也≈0，
+     // 测不到高频振幅 —— §12.3 的对照表里 proxy=d 在 P=8 的振幅依赖是 1.0x，
+     // 等于门控失效。|C−B2| 在整个频段都随振幅线性增长。
+-    runRange(0, wh, threads, [&](int yBegin, int yEnd) {
++    runRange(0, pwh, threads, [&](int yBegin, int yEnd) {
+         for (int y = yBegin; y < yEnd; y++) {
+-            const size_t o = (size_t)y * (size_t)ww;
+-            for (int x = 0; x < ww; x++) {
++            const size_t o = (size_t)y * (size_t)pww;
++            for (int x = 0; x < pww; x++) {
+                 float d = sg[o + x] - b2g[o + x];
+                 amp[o + x] = (d < 0.0f) ? -d : d;
+             }
+         }
+     });
+     float* ampp[1] = {amp};
+-    bandBoxN(ampp, tmpp, 1, ww, wh, ra, nPass, bt);
++    bandBoxN(ampp, tmpp, 1, pww, pwh, ra, nPass, bt);
+ 
+     // ---- 合成（与 surface3Rgb25 逐行同口径，多一步 ③ 振幅门控）----------
+     const float I = (p.I < 0.0f) ? 0.0f : ((p.I > 1.0f) ? 1.0f : p.I);
+@@ -1205,11 +1240,28 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+     const float sxw = (float)ww / (float)w;
+     const float syw = (float)wh / (float)h;
+ 
+-    runRange(0, h, threads, [&](int yBegin, int yEnd) {
++    // 裁剪区之外保持逐字节原样：整帧路径靠下面这个循环把 dst 全写一遍，
++    // 裁剪后必须先把剩下的部分拷过去，否则 dst 上是上一帧的残留。
++    if (cw != w || ch != h) {
++        for (int y = 0; y < h; y++) {
++            const size_t row = (size_t)y * (size_t)w;
++            if (y < cy0 || y >= cy1) {
++                memcpy(dst + row * 4, src + row * 4, (size_t)w * 4);
++                continue;
++            }
++            if (cx0 > 0)
++                memcpy(dst + row * 4, src + row * 4, (size_t)cx0 * 4);
++            if (cx1 < w)
++                memcpy(dst + (row + (size_t)cx1) * 4, src + (row + (size_t)cx1) * 4,
++                       (size_t)(w - cx1) * 4);
++        }
++    }
++
++    runRange(cy0, cy1, threads, [&](int yBegin, int yEnd) {
+         for (int y = yBegin; y < yEnd; y++) {
+             const size_t rowOff = (size_t)y * (size_t)w;
+-            const float vy = ((float)y + 0.5f) * syw;
+-            for (int x = 0; x < w; x++) {
++            const float vy = ((float)y + 0.5f) * syw - (float)gpy;
++            for (int x = cx0; x < cx1; x++) {
+                 const size_t o = (rowOff + (size_t)x) * 4;
+                 const int m = mask ? (int)mask[rowOff + (size_t)x] : 255;
+                 if (m == 0) {
+@@ -1219,7 +1271,7 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+                     dst[o + 3] = src[o + 3];
+                     continue;
+                 }
+-                const float vx = ((float)x + 0.5f) * sxw;
++                const float vx = ((float)x + 0.5f) * sxw - (float)gpx;
+                 const float skin = (float)m * inv255;
+                 const float eye = protect
+                     ? ((float)protect[rowOff + (size_t)x] * inv255 * eyeK)
+@@ -1229,17 +1281,17 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
+ 
+                 // ③ 振幅门控：弱纹理 w→1（照磨），强纹理 w→0（放过）
+                 //    gw = 1 / (1 + (a/T)^gwp)，gwp>2 时陡度更大 → 选择性的来源。
+-                float a = planeBilinear(amp, ww, wh, vx, vy) * invT;
++                float a = planeBilinear(amp, pww, pwh, vx, vy) * invT;
+                 const float ap = gwpSq ? (a * a)
+                                        : ((a > 1e-6f) ? powf(a, gwp) : 0.0f);
+                 float gw = 1.0f / (1.0f + ap);
+ 
+-                const float v1[3] = {planeBilinear(b1r, ww, wh, vx, vy),
+-                                     planeBilinear(b1g, ww, wh, vx, vy),
+-                                     planeBilinear(b1b, ww, wh, vx, vy)};
+-                const float v2[3] = {planeBilinear(b2r, ww, wh, vx, vy),
+-                                     planeBilinear(b2g, ww, wh, vx, vy),
+-                                     planeBilinear(b2b, ww, wh, vx, vy)};
++                const float v1[3] = {planeBilinear(b1r, pww, pwh, vx, vy),
++                                     planeBilinear(b1g, pww, pwh, vx, vy),
++                                     planeBilinear(b1b, pww, pwh, vx, vy)};
++                const float v2[3] = {planeBilinear(b2r, pww, pwh, vx, vy),
++                                     planeBilinear(b2g, pww, pwh, vx, vy),
++                                     planeBilinear(b2b, pww, pwh, vx, vy)};
+                 for (int k = 0; k < 3; k++) {
+                     const float c = (float)src[o + (size_t)k];
+                     float even = c - v1[k] + v2[k];

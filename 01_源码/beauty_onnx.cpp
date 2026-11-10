@@ -129,7 +129,17 @@ bool OnnxModel::load(const char* path, std::string& err, int threads) {
     env_ = env;
 
     OrtSessionOptions* opts = nullptr;
-    A->CreateSessionOptions(&opts);
+    OrtStatus* stOpts = A->CreateSessionOptions(&opts);
+    if (stOpts != nullptr) {
+        err = std::string("CreateSessionOptions 失败: ") + A->GetErrorMessage(stOpts);
+        A->ReleaseStatus(stOpts);
+        if (opts) A->ReleaseSessionOptions(opts);
+        return false;
+    }
+    if (!opts) {
+        err = "CreateSessionOptions 返回空句柄";
+        return false;
+    }
     if (threads > 0) A->SetIntraOpNumThreads(opts, threads);
     A->SetSessionGraphOptimizationLevel(opts, ORT_ENABLE_ALL);
 
@@ -171,12 +181,32 @@ bool OnnxModel::load(const char* path, std::string& err, int threads) {
     session_ = sess;
 
     OrtAllocator* alloc = nullptr;
-    A->GetAllocatorWithDefaultOptions(&alloc);
+    OrtStatus* stAlloc = A->GetAllocatorWithDefaultOptions(&alloc);
+    if (stAlloc != nullptr) {
+        err = std::string("GetAllocatorWithDefaultOptions 失败: ") +
+              A->GetErrorMessage(stAlloc);
+        A->ReleaseStatus(stAlloc);
+        return false;
+    }
+    if (!alloc) {
+        err = "GetAllocatorWithDefaultOptions 返回空句柄";
+        return false;
+    }
 
     // 输入：只支持单输入模型（YuNet 就是单输入）
+    // 2026-11-10 代码审查 #3：调用失败与「成功但空名」必须分开处理。
+    // 失败时 *inName 的写入语义由 ORT 决定（待人工确认），不由本 allocator Free；
+    // 成功时空名/正常名都是 ORT 经同一 allocator 分配的，按原路径释放。
     char* inName = nullptr;
-    if (A->SessionGetInputName(sess, 0, alloc, &inName) != nullptr) {
-        err = "读取输入名失败";
+    OrtStatus* stInName = A->SessionGetInputName(sess, 0, alloc, &inName);
+    if (stInName != nullptr) {
+        err = std::string("读取输入名失败: ") + A->GetErrorMessage(stInName);
+        A->ReleaseStatus(stInName);
+        return false;
+    }
+    if (!inName || !inName[0]) {
+        err = "读取输入名返回空名称";
+        if (inName) alloc->Free(alloc, inName);
         return false;
     }
     inName_ = inName;
@@ -198,10 +228,23 @@ bool OnnxModel::load(const char* path, std::string& err, int threads) {
     A->SessionGetOutputCount(sess, &nout);
     for (size_t i = 0; i < nout; i++) {
         char* on = nullptr;
-        if (A->SessionGetOutputName(sess, i, alloc, &on) == nullptr) {
-            outNames_.push_back(on);
-            alloc->Free(alloc, on);
+        // 2026-11-10 代码审查 #5：接住 status 并释放；on 为空时不能用
+        // nullptr 构造 std::string。任一输出名取不到就整体加载失败 ——
+        // outNames_ 的元素顺序与 ORT 输出序号一一对应，跳过会让 run()
+        // 里的 Run 名字数组错位。
+        OrtStatus* stOn = A->SessionGetOutputName(sess, i, alloc, &on);
+        if (stOn != nullptr) {
+            err = std::string("读取输出名失败: ") + A->GetErrorMessage(stOn);
+            A->ReleaseStatus(stOn);
+            return false;
         }
+        if (!on || !on[0]) {
+            err = "读取输出名返回空名称";
+            if (on) alloc->Free(alloc, on);
+            return false;
+        }
+        outNames_.push_back(on);
+        alloc->Free(alloc, on);
     }
 
     OrtMemoryInfo* mem = nullptr;

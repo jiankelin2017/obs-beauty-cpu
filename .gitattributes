@@ -1,0 +1,38 @@
+# .gitattributes  --  2026-11-09
+#
+# 为什么是 * -text，而不是 text / eol=crlf / eol=lf
+# ------------------------------------------------
+# 本仓库历史上混用 CRLF、纯 LF，甚至同一文件里两种都有的混合换行；同一扩展名、
+# 同一目录内也并存（2026-11-09 全库实测：05_验证/*.md 62 个 CRLF + 22 个 LF，
+# docs/*.md 13 个 CRLF + 30 个 LF）。部分 .md / .nsi / .ps1 还带 UTF-8 BOM。
+# 若声明 text 或 eol=*，git add 会把 CRLF 归一化成 LF 存进索引，checkout 时
+# 再按平台转回来，BOM 与换行约定会被悄悄改写，且 clone 后与当前工作区不一致。
+# 这里一律禁用换行转换：索引、工作区、clone 结果三者逐字节一致。
+#
+# 配套设置（本机已执行）：git config core.autocrlf false
+# .gitattributes 的 -text 优先级高于 core.autocrlf，因此即便别的机器上
+# core.autocrlf=true，也不会触发转换。
+#
+# 注意：-text 只关闭换行归一化，文本 diff 仍然可用；要完全禁用 diff 的
+# 二进制文件在下面单独用 binary 标记。
+* -text
+
+# 二进制产物：避免 diff / merge 误判（这些多数已被 .gitignore 忽略，
+# 显式声明是为了将来若有人放行某个文件时仍有正确属性）
+*.dll   binary
+*.exe   binary
+*.obj   binary
+*.lib   binary
+*.pdb   binary
+*.exp   binary
+*.ilk   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.bmp   binary
+*.gif   binary
+*.onnx  binary
+*.zip   binary
+*.7z    binary
+*.bin   binary
+*.bak   binary

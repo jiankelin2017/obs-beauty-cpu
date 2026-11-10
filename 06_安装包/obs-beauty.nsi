@@ -1,13 +1,14 @@
 ﻿; ============================================================================
-;  OBS美颜 CPU 版 安装包  v1.0.1.0  (NSIS 3 / Unicode)
+;  OBS美颜 CPU 版 安装包  (NSIS 3 / Unicode)
 ;
 ;  装什么（4 个文件 + 文档 + 卸载器）：
-;    obs-beauty.dll      = 滤镜本体（CPU 版 1.0.1.0）
+;    obs-beauty.dll      = 滤镜本体（CPU 版，版本见 beauty_params.h）
 ;    onnxruntime.dll     = 自研引擎运行时（必须与滤镜 DLL 同目录）
 ;    models\yunet.onnx   = 人脸检测模型（必须落在 models\ 子目录）
 ;    obs-beauty-ui.dll   = 参数面板（ProgramData 下的插件目录）
 ;
-;  版本轴：CPU 线 1.0.1.0（四段式，见 01_源码\beauty_params.h），
+;  版本轴：CPU 线四段式，唯一口径是 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR，
+;  由 build_setup.ps1 读出后用 /DPKGVER 等传进来；本文件不再写死版本号。
 ;  与 GPU 版 3.0.1 独立，不可互比。引擎 core 已并入这条单轴。
 ;
 ;  装机口径（2026-11-07 按用户裁定 C-1 统一到 ProgramData）：
@@ -30,7 +31,11 @@
 ;  机器上本来就有 obs-beauty\ SDK 目录的，本包一律不动。
 ;
 ;  卸载三条硬规则（"装之前什么样，卸完还是什么样"）：
-;    1. 装之前已有同名文件 → 先备份到 <InstallDir>\backup，卸载时还原
+;    1. **首次安装**时装之前已有同名文件 → 先备份到 <InstallDir>\backup，卸载时还原
+;       （那种文件只可能来自别的产品：GPU 版、插件市场、手工放的）
+;    1b. **升级安装**（注册表里已有本安装器写的 Version）→ 不备份，并把旧的
+;       .bak 清掉 —— 目录里那份是本安装器上一版写的，备份它只会让卸载退回旧版。
+;       1.0.13.11 起生效，之前的行为是「备份只写一次、永不刷新」。
 ;    2. 装之前没有 → 卸载时删除（models 目录只在空的时候删）
 ;    3. 不是本包装的东西（比如别人放的 obs-beauty\ SDK、models 里的其他模型）→ 一律不动
 ;
@@ -59,19 +64,20 @@ SetDatablockOptimize on
 ; 「程序和功能」里留下两条重复项。
 !define APPID        "OBSBeauty.NamaBeauty"
 ; 版本号由 build_setup.ps1 用 /D 传进来 —— 只在一处维护。
-; CPU 线用四段式 1.0.1.0；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
-; 手工编译（直接跑 makensis）时用下面这几个兜底值。
+; CPU 线四段式；GPU 版是另一条独立轴（3.0.1，三段式），不可互比。
+; 2026-11-09 起不再写死兜底值：以前直接跑 makensis 会静默打出 v1.0.3.0 的
+; 旧号包（C13 坑 #1 的变体）。现在缺 PKGVER 直接编译失败，其余三项跟随 PKGVER。
 !ifndef PKGVER
-  !define PKGVER     "1.0.1.0"
+  !error "PKGVER not defined. Run 06_安装包\build_setup.ps1, or pass /DPKGVER=x.x.x.x with FILTERVER/PANELVER/COREVER/SRCDIR/OUTFILE."
 !endif
 !ifndef FILTERVER
-  !define FILTERVER  "1.0.1.0"
+  !define FILTERVER "${PKGVER}"
 !endif
 !ifndef PANELVER
-  !define PANELVER   "1.0.1.0"
+  !define PANELVER  "${PKGVER}"
 !endif
 !ifndef COREVER
-  !define COREVER    "1.0.1.0"
+  !define COREVER   "${PKGVER}"
 !endif
 !define PUBLISHER    "OBS Beauty (personal build)"
 !define ESTSIZE      12250            ; KB，控制面板里显示的大小（4 个文件约 12.2 MB）
@@ -115,6 +121,11 @@ Var OBSDIR       ; <ProgramData>\obs-studio\plugins\obs-beauty\bin\64bit（目�
 Var PDIR         ; ProgramData
 Var UIDIR        ; <ProgramData>\obs-studio\plugins\obs-beauty-ui\bin\64bit
 
+; "external" = 首次安装，装之前目录里的同名文件属于别的产品，卸载要还原
+; "self"     = 升级安装，那份文件是本安装器上一版写的，卸载要删除
+; 由 SecCore 开头按注册表 Version 判定，SecPanel 沿用同一个结果。
+Var BACKUP_ORIGIN
+
 Name "${APPNAME} ${EDITION} ${PKGVER}"
 Caption "${APPNAME} ${EDITION} ${PKGVER} 安装程序"
 OutFile "${OUTFILE}"
@@ -124,7 +135,7 @@ ShowInstDetails show
 ShowUninstDetails show
 BrandingText "${APPNAME} ${EDITION} ${PKGVER}  ·  滤镜 ${FILTERVER} + 面板 ${PANELVER} + 引擎 ${COREVER}"
 
-; PKGVER 已是四段式 1.0.1.0，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
+; PKGVER 已是四段式 x.y.z.w，Windows 版本资源直接取用，不能再补 ".0"（会变五段）。
 VIProductVersion "${PKGVER}"
 VIAddVersionKey /LANG=2052 "ProductName"     "${APPNAME} ${EDITION}"
 VIAddVersionKey /LANG=2052 "ProductVersion"  "${PKGVER}"
@@ -211,17 +222,44 @@ Section "滤镜 + 自研引擎运行时" SecCore
   DetailPrint "目标全局插件目录：$OBSDIR"
 
   CreateDirectory "$INSTDIR\backup"
+
+  ; ---- 首次安装 / 升级安装 的判定（1.0.13.11） -----------------------------
+  ; 备份只对「首次安装」有意义：那时目录里的同名文件必然是别的产品
+  ; （GPU 版 / 插件市场版 / 手工放的）。升级时目录里那份是本安装器自己
+  ; 上一版写的，再备份它 → 卸载会把旧版放回去。PHASE R 实测：
+  ; 装 13.9 → 升级 13.10 → 卸载，ProgramData 里留下 505,856 B 的 13.9。
+  ; 判据用注册表 Version：GPU 版装到同一路径，但它用另一个键
+  ; （...\Uninstall\obs-beauty）且从不写本键，所以「本键有 Version」
+  ; 等价于「目录里是 CPU 线的自家文件」。
+  ; 滤镜 DLL 没有版本资源（01_源码下无 .rc），卸载时无法反查 .bak 的来源，
+  ; 所以判断必须放在安装时。
+  StrCpy $9 ""                       ; 先清空：键不存在时读失败不能沿用上个值
+  ReadRegStr $9 HKLM "${REGKEY}" "Version"
+  StrCmp $9 "" backup_origin_external
+    StrCpy $BACKUP_ORIGIN "self"
+    DetailPrint "升级安装（已有 $9）：不保留旧版备份，卸载将直接删除"
+    Delete "$INSTDIR\backup\obs-beauty.dll.bak"
+    Delete "$INSTDIR\backup\onnxruntime.dll.bak"
+    Delete "$INSTDIR\backup\yunet.onnx.bak"
+    Delete "$INSTDIR\backup\obs-beauty-ui.dll.bak"
+    Goto backup_origin_done
+  backup_origin_external:
+    StrCpy $BACKUP_ORIGIN "external"
+  backup_origin_done:
+
   CreateDirectory "$OBSDIR"
   SetOutPath "$OBSDIR"
   SetOverwrite on
 
   ; ---- 滤镜 DLL -----------------------------------------------------------
-  ; 只有「第一次装」才备份：备份已存在说明之前装过，那才是真正的原始文件，
-  ; 不能被我们自己上一版的 DLL 覆盖掉。
-  ${IfNot} ${FileExists} "$INSTDIR\backup\obs-beauty.dll.bak"
-    ${If} ${FileExists} "$OBSDIR\obs-beauty.dll"
-      CopyFiles /SILENT "$OBSDIR\obs-beauty.dll" "$INSTDIR\backup\obs-beauty.dll.bak"
-      DetailPrint "已备份装之前的 obs-beauty.dll（卸载时还原）"
+  ; 只有「首次安装」才备份（$BACKUP_ORIGIN 已在 SecCore 开头判定）：
+  ; 升级时目录里那份就是本安装器上一版写的，备份它只会让卸载退回旧版。
+  ${If} $BACKUP_ORIGIN == "external"
+    ${IfNot} ${FileExists} "$INSTDIR\backup\obs-beauty.dll.bak"
+      ${If} ${FileExists} "$OBSDIR\obs-beauty.dll"
+        CopyFiles /SILENT "$OBSDIR\obs-beauty.dll" "$INSTDIR\backup\obs-beauty.dll.bak"
+        DetailPrint "已备份装之前的 obs-beauty.dll（卸载时还原）"
+      ${EndIf}
     ${EndIf}
   ${EndIf}
   File /oname=obs-beauty.dll "${SRCDIR}\filter\obs-beauty.dll"
@@ -229,10 +267,12 @@ Section "滤镜 + 自研引擎运行时" SecCore
 
   ; ---- ONNX Runtime -------------------------------------------------------
   ; 必须与滤镜 DLL 同目录：ensureReady() 用 selfDir() + "\onnxruntime.dll"
-  ${IfNot} ${FileExists} "$INSTDIR\backup\onnxruntime.dll.bak"
-    ${If} ${FileExists} "$OBSDIR\onnxruntime.dll"
-      CopyFiles /SILENT "$OBSDIR\onnxruntime.dll" "$INSTDIR\backup\onnxruntime.dll.bak"
-      DetailPrint "已备份装之前的 onnxruntime.dll（卸载时还原）"
+  ${If} $BACKUP_ORIGIN == "external"
+    ${IfNot} ${FileExists} "$INSTDIR\backup\onnxruntime.dll.bak"
+      ${If} ${FileExists} "$OBSDIR\onnxruntime.dll"
+        CopyFiles /SILENT "$OBSDIR\onnxruntime.dll" "$INSTDIR\backup\onnxruntime.dll.bak"
+        DetailPrint "已备份装之前的 onnxruntime.dll（卸载时还原）"
+      ${EndIf}
     ${EndIf}
   ${EndIf}
   File /oname=onnxruntime.dll "${SRCDIR}\core\onnxruntime.dll"
@@ -255,10 +295,12 @@ Section "滤镜 + 自研引擎运行时" SecCore
     DetailPrint "models 目录由本包创建，卸载时删除"
   ${EndIf}
 
-  ${IfNot} ${FileExists} "$INSTDIR\backup\yunet.onnx.bak"
-    ${If} ${FileExists} "$OBSDIR\models\yunet.onnx"
-      CopyFiles /SILENT "$OBSDIR\models\yunet.onnx" "$INSTDIR\backup\yunet.onnx.bak"
-      DetailPrint "已备份装之前的 models\yunet.onnx（卸载时还原）"
+  ${If} $BACKUP_ORIGIN == "external"
+    ${IfNot} ${FileExists} "$INSTDIR\backup\yunet.onnx.bak"
+      ${If} ${FileExists} "$OBSDIR\models\yunet.onnx"
+        CopyFiles /SILENT "$OBSDIR\models\yunet.onnx" "$INSTDIR\backup\yunet.onnx.bak"
+        DetailPrint "已备份装之前的 models\yunet.onnx（卸载时还原）"
+      ${EndIf}
     ${EndIf}
   ${EndIf}
 
@@ -273,10 +315,12 @@ Section "参数面板" SecPanel
   SectionIn RO
   CreateDirectory "$UIDIR"
 
-  ${IfNot} ${FileExists} "$INSTDIR\backup\obs-beauty-ui.dll.bak"
-    ${If} ${FileExists} "$UIDIR\obs-beauty-ui.dll"
-      CopyFiles /SILENT "$UIDIR\obs-beauty-ui.dll" "$INSTDIR\backup\obs-beauty-ui.dll.bak"
-      DetailPrint "已备份装之前的 obs-beauty-ui.dll（卸载时还原）"
+  ${If} $BACKUP_ORIGIN == "external"
+    ${IfNot} ${FileExists} "$INSTDIR\backup\obs-beauty-ui.dll.bak"
+      ${If} ${FileExists} "$UIDIR\obs-beauty-ui.dll"
+        CopyFiles /SILENT "$UIDIR\obs-beauty-ui.dll" "$INSTDIR\backup\obs-beauty-ui.dll.bak"
+        DetailPrint "已备份装之前的 obs-beauty-ui.dll（卸载时还原）"
+      ${EndIf}
     ${EndIf}
   ${EndIf}
 

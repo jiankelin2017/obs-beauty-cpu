@@ -9,6 +9,7 @@
 //   · shade 项按亮度加权：眼白、牙齿、高光不该被继续提亮（会糊成一片白）。
 //     这不是抄来的，是「提亮」类效果不做高光保护的必然结果。
 
+#include "beauty_env.h"   // beauty_env()：BEAUTY_* 覆盖的唯一入口（1.0.13.10 C-2/C-3）
 #include "beauty_region.h"
 
 #include <algorithm>
@@ -390,7 +391,7 @@ void applySpotFix(unsigned char* dst, int w, int h,
         }
     });
 
-    if (getenv("BEAUTY_SPOT_DEBUG")) {
+    if (beauty_env("BEAUTY_SPOT_DEBUG")) {
         long hit = 0;
         float dmax = 0.0f;
         for (size_t i = 0; i < n; i++) {

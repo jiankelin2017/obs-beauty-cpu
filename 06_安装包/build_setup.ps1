@@ -2,7 +2,7 @@
 #  build_setup.ps1 - 打包 "OBS美颜" 安装包 (NSIS 3)
 #
 #  做什么：
-#    1) 从 02_构建\build_1.0.1.0 取滤镜/面板 DLL（CPU 线独立产物目录），
+#    1) 从 02_构建\build_<版本> 取滤镜/面板 DLL（CPU 线独立产物目录），
 #       从 05_验证 取 ONNX Runtime + YuNet
 #    2) 校验版本串（防止把旧构建打进包里 —— C13 坑 #1）
 #    3) 暂存到纯 ASCII 目录（NSIS 遇到中文源路径会报 no files found）
@@ -10,33 +10,55 @@
 #    5) 确保 obs-beauty.nsi 是 UTF-8 with BOM（否则中文界面乱码）
 #    6) 调 makensis 编译，产物落到 06_安装包\OBS美颜_CPU_v<版本>.exe
 #
+#  版本从哪来（2026-11-09 改）：
+#    默认读 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR —— 源码是唯一口径，
+#    不再在这里手抄版本号。打旧包用 -Version 显式指定（同时要配合
+#    BEAUTY_BUILD_OUT 指向那版产物，否则版本串自检会拦）。
+#
 #  用法：
 #    powershell -ExecutionPolicy Bypass -File build_setup.ps1
 #    powershell -ExecutionPolicy Bypass -File build_setup.ps1 -KeepStage
+#    powershell -ExecutionPolicy Bypass -File build_setup.ps1 -Version 1.0.12.0 `
+#        -BuildOut "D:\插件\OBS美颜源码\02_构建\build_1.0.12.0"
 # ============================================================================
 
 [CmdletBinding()]
 param(
-    [switch]$KeepStage
+    [switch]$KeepStage,
+    [string]$Version,
+    [string]$BuildOut
 )
 
 $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root      = Split-Path -Parent $ScriptDir
-# CPU 1.0.1.0 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
-# 绝不读 build_output（那里是 3.1.40，版本串自检会拦住但不必依赖它）。
-# 需要临时指向别处（例如验证构建）时设环境变量 BEAUTY_BUILD_OUT。
-$BuildOut  = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root '02_构建\build_1.0.1.0' }
 $Nsi       = Join-Path $ScriptDir 'obs-beauty.nsi'
 $Makensis  = 'C:\Program Files (x86)\NSIS\makensis.exe'
 
 # CPU 四段版本轴（唯一口径见 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR）。
 # GPU 版是另一条独立轴（3.0.1，三段式），两条轴不可互比。
-$Ver = '1.0.1.0'
-$FilterVer = '1.0.1.0'
-$PanelVer  = '1.0.1.0'
-$CoreVer   = '1.0.1.0'
+$ParamsH = Join-Path $Root '01_源码\beauty_params.h'
+if (-not (Test-Path -LiteralPath $ParamsH)) { Write-Host "[build] ERROR: $ParamsH not found" -ForegroundColor Red; exit 1 }
+$m = Select-String -LiteralPath $ParamsH -Pattern 'BEAUTY_BUILD_STR\s+"([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)"'
+if (-not $m) { Write-Host "[build] ERROR: BEAUTY_BUILD_STR not found in beauty_params.h" -ForegroundColor Red; exit 1 }
+$SrcVer = $m.Matches[0].Groups[1].Value
+$Ver    = if ($Version) { $Version } else { $SrcVer }
+if ($Ver -ne $SrcVer) {
+    Write-Host "[build] WARNING: packaging $Ver but source says $SrcVer" -ForegroundColor Yellow
+}
+
+# 版本号单一来源，四个字段同轴
+$FilterVer = $Ver
+$PanelVer  = $Ver
+$CoreVer   = $Ver
+
+# CPU 产物与 3.1.40 定稿 DLL 物理隔离：默认只从独立目录取件，
+# 绝不读 build_output（那里是 3.1.40，版本串自检会拦住但不必依赖它）。
+# 需要临时指向别处（例如验证构建）时用 -BuildOut 或环境变量 BEAUTY_BUILD_OUT。
+if (-not $BuildOut) {
+    $BuildOut = if ($env:BEAUTY_BUILD_OUT) { $env:BEAUTY_BUILD_OUT } else { Join-Path $Root "02_构建\build_$Ver" }
+}
 
 function Fail($msg) { Write-Host "[build] ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Info($msg) { Write-Host "[build] $msg" }
@@ -77,10 +99,10 @@ function Assert-ContainsBytes([string]$path, [string]$needle) {
 }
 # 注：2026-11-07 起 CoreEngine::version() 直接返回 BEAUTY_BUILD_STR，
 # 滤镜 DLL 里不再残留旧版本串；自检要求两件 DLL 都含当前轴的版本串。
-Assert-ContainsBytes $Src.filter '1.0.1.0'
-Assert-ContainsBytes $Src.panel  '1.0.1.0'
+Assert-ContainsBytes $Src.filter $Ver
+Assert-ContainsBytes $Src.panel  $Ver
 Assert-ContainsBytes $Src.filter 'obs_beauty_filter'
-Info 'version strings OK (CPU 1.0.1.0 / obs_beauty_filter)'
+Info "version strings OK (CPU $Ver / obs_beauty_filter)"
 
 # ---------------------------------------------------------------- 暂存目录
 $Stage = Join-Path $env:TEMP 'obsbeauty_pkg'

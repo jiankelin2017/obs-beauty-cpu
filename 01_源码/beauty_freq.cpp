@@ -1,5 +1,6 @@
 // beauty_freq.cpp —— 高低频分离磨皮实现
 
+#include "beauty_env.h"   // beauty_env()：BEAUTY_* 覆盖的唯一入口（1.0.13.10 C-2/C-3）
 #include "beauty_freq.h"
 #include "beauty_pool.h"
 
@@ -7,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 #include <vector>
@@ -579,31 +581,169 @@ struct Lv5 {
 
 }  // namespace
 
-void toneColor(unsigned char* dst, int w, int h,
+namespace {
+
+// 色彩三段（清晰 / 美白 / 红润）是否**整帧施加**（不乘皮肤掩码）。
+//
+// 默认 1 —— 口径与 GPU 版 `BEAUTY_TONE_GLOBAL=1` 完全一致，也是本版要修的
+// 「手遮脸 → 美白遮罩叠到手部」的修法本身。
+//
+// 为什么这三段不该乘掩码：它们是**纯逐像素颜色表**，与位置、邻域都无关
+// （实测箱内 σ 只有零点几灰阶，见上面 LUT 的注释）。乘上掩码之后，掩码的
+// 边界（椭圆 / 脸框裁切 / 脖子矩形）就变成一条可见的色界。手往脸上一搭，
+// 脸框与肤色椭圆都还罩得住手背（手背是肤色，YCbCr 判据必然放行），那条
+// 色界于是正好切在手背上 —— 用户看到的就是「一块美白遮罩盖在手部」。
+// 整帧施加后画面里根本不存在这条边界：手拿到的是与全画面同一条曲线，
+// 不会再出现一个贴在手背上的椭圆。
+//
+// 只放弃**色调**这条链上的空间选区。磨皮 / 锐化 / 五官五项仍然按皮肤掩码走
+// —— 那几项要的是「只动皮肤」，而色调要的是「整幅一致的色彩」。
+//
+// 回退：`BEAUTY_TONE_GLOBAL=0` 恢复 1.0.1.0 及以前的行为（只在 roi 内、
+// mask>0 的像素上施加；背景逐字节不变，旧 golden 用它可以原样复现）。
+// 只读一次环境变量：色调每帧都跑，getenv + 字符串比较会有可测开销。
+bool toneGlobal() {
+    static const bool v = [] {
+        const char* e = beauty_env("BEAUTY_TONE_GLOBAL");
+        return !(e && e[0] == '0');
+    }();
+    return v;
+}
+
+}  // namespace
+
+// 1.0.11.0（A3）：整数复合表开关，默认开。
+// 放在匿名命名空间外，因为滤镜侧 init 日志要打「跑的是哪条路」。
+bool toneIntLutOn() {
+    static const bool v = [] {
+        const char* e = beauty_env("BEAUTY_TONE_LUT");
+        return !(e && e[0] == '0');
+    }();
+    return v;
+}
+
+bool toneColor(unsigned char* dst, int w, int h,
                const unsigned char* mask, const RoiRect& roi,
                float clarity, float whiten, float rosy, int threads) {
-    if (!dst || !mask || roi.empty()) return;
+    if (!dst || !mask || roi.empty()) return false;
     if (clarity < 0.0f) clarity = 0.0f;
     if (clarity > 1.0f) clarity = 1.0f;
     if (whiten < 0.0f) whiten = 0.0f;
     if (whiten > 1.0f) whiten = 1.0f;
     if (rosy < 0.0f) rosy = 0.0f;
     if (rosy > 1.0f) rosy = 1.0f;
-    if (clarity <= 0.0f && whiten <= 0.0f && rosy <= 0.0f) return;
+    if (clarity <= 0.0f && whiten <= 0.0f && rosy <= 0.0f) return false;
 
     const bool doClar = (clarity > 0.0f);
     const bool doWhiten = (whiten > 0.0f);
     const bool doRosy = (rosy > 0.0f);
     const Lv5 lc(clarity), lw(whiten);
 
-    runRows(roi.y0, roi.y1, threads, [&](int yBegin, int yEnd) {
+    // 整帧模式跳过掩码与 ROI；回退模式两种都用（见 toneGlobal 的注释）。
+    const bool global = toneGlobal();
+    const int rx0 = global ? 0 : roi.x0;
+    const int rx1 = global ? w : roi.x1;
+    const int ry0 = global ? 0 : roi.y0;
+    const int ry1 = global ? h : roi.y1;
+
+    // 17 锚点表**预展开成 256 项**（每通道一张）。
+    //
+    // 为什么必须做：整帧模式下每像素要跑 2 次 lut17（档位 + 取值两级插值）×
+    // 3 通道，4K 单线程实测 +63 ms（29 → 92 ms），付不起。输入本来就是
+    // 0..255 的整数，而 lut17 对整数只做一次线性插值 —— 缓存下来值不变，
+    // 展开在数学上与原式**逐位等价**（GPU 版的 444,528 采样对拍偏差 0）。
+    // 表在每次调用重建一次（768 次求值），相对整帧可以忽略。
+    float tC[3][256], tW[3][256], tG[256], tB[256];
+    if (doClar)
+        for (int v = 0; v < 256; ++v)
+            for (int c = 0; c < 3; ++c) tC[c][v] = lc.at(kClarityLut5, c, (float)v);
+    if (doWhiten)
+        for (int v = 0; v < 256; ++v)
+            for (int c = 0; c < 3; ++c) tW[c][v] = lw.at(kWhitenLut5, c, (float)v);
+    if (doRosy)
+        for (int v = 0; v < 256; ++v) {
+            tG[v] = dlt17(kRosyG17, (float)v);
+            tB[v] = dlt17(kRosyB17, (float)v);
+        }
+
+    // 查表 + 小数线性插值。17 锚点表在每 16 级内线性，所以本式与 lut17(v)
+    // 逐位等价（v 可以是「清晰」级联之后的非整数）。
+    auto tab = [](const float* t, float v) {
+        if (v <= 0.0f) return t[0];
+        if (v >= 255.0f) return t[255];
+        const int i = (int)v;
+        const float f = v - (float)i;
+        return t[i] + (t[i + 1] - t[i]) * f;
+    };
+
+    // ---- 1.0.11.0（A3）：整帧模式走「整数复合表」---------------------------
+    // 整帧模式里 sk 恒等于 1.0，于是「清晰 → 美白 → 红润」对每个通道就是一个
+    // **只取决于输入字节的纯函数**：输入 0..255 共 256 种，输出也只有 256 种。
+    // 把它预计算成 3 张 256 项 uint8 表，每像素就只剩 3 次查表 + 3 次存，
+    // 省掉每像素 3~9 次浮点插值、9 个分支和 6 次 byte↔float 往返。
+    //
+    // 逐字节等价性：表里的算式与下面逐像素版本**逐字相同**。唯一被「简化」的
+    // 是 * sk，而 sk 在这里就是 1.0f —— 乘 1.0f 在 IEEE-754 下是精确的，
+    // `r += (tab - r) * 1.0f` 与逐像素版 `r += (tab - r) * sk` 得到同一个 float。
+    // 所以不能把 `r += (tab - r)` 手写成 `r = tab`（那是代数等价、不是浮点等价）。
+    //
+    // 掩码回退模式（BEAUTY_TONE_GLOBAL=0）不走这条：那里 sk 随像素变，没法查表。
+    if (global && toneIntLutOn()) {
+        unsigned char uR[256], uG[256], uB[256];
+        for (int v = 0; v < 256; ++v) {
+            float r = (float)v, g = (float)v, b = (float)v;
+            if (doClar) {
+                r += (tab(tC[0], r) - r) * 1.0f;
+                g += (tab(tC[1], g) - g) * 1.0f;
+                b += (tab(tC[2], b) - b) * 1.0f;
+            }
+            if (doWhiten) {
+                r += (tab(tW[0], r) - r) * 1.0f;
+                g += (tab(tW[1], g) - g) * 1.0f;
+                b += (tab(tW[2], b) - b) * 1.0f;
+            }
+            if (doRosy) {
+                g += tab(tG, g) * rosy * 1.0f;
+                b += tab(tB, b) * rosy * 1.0f;
+            }
+            uR[v] = (unsigned char)(r < 0 ? 0 : (r > 255.0f ? 255.0f : r + 0.5f));
+            uG[v] = (unsigned char)(g < 0 ? 0 : (g > 255.0f ? 255.0f : g + 0.5f));
+            uB[v] = (unsigned char)(b < 0 ? 0 : (b > 255.0f ? 255.0f : b + 0.5f));
+        }
+        // 1.0.12.0（A6）：顺手把 A 置 255。
+        // 这段本来就是整帧读改写 8.3 MB，A 是同一 cache line 里的第 4 个字节，
+        // 边际成本≈0；而独立的 forceOpaque 要为此再完整遍历一遍整帧。
+        // 写成一个 32 位存而不是 4 次 8 位存：小端下 0xFF000000 | B<<16 | G<<8 | R
+        // 正好是 RGBA 四字节，一次读改写比「3 次查表存 + 1 次 A 存」少一半访存。
+        // p 每像素走 4 字节、dst 至少 8 字节对齐，所以 32 位对齐安全。
+        runRows(0, h, threads, [&](int yBegin, int yEnd) {
+            for (int y = yBegin; y < yEnd; y++) {
+                unsigned char* p = dst + (size_t)y * (size_t)w * 4;
+                for (int x = 0; x < w; x++, p += 4) {
+                    const uint32_t v = (uint32_t)uR[p[0]]
+                                     | ((uint32_t)uG[p[1]] << 8)
+                                     | ((uint32_t)uB[p[2]] << 16)
+                                     | 0xFF000000u;
+                    *(uint32_t*)(void*)p = v;
+                }
+            }
+        });
+        return true;
+    }
+
+    runRows(ry0, ry1, threads, [&](int yBegin, int yEnd) {
         for (int y = yBegin; y < yEnd; y++) {
             const size_t rowOff = (size_t)y * w;
-            for (int x = roi.x0; x < roi.x1; x++) {
-                const unsigned char mv = mask[rowOff + x];
-                if (mv == 0) continue;          // 非皮肤：一个字节都不动
+            for (int x = rx0; x < rx1; x++) {
+                float sk;
+                if (global) {
+                    sk = 1.0f;                  // 整帧施加：不存在掩码边界
+                } else {
+                    const unsigned char mv = mask[rowOff + x];
+                    if (mv == 0) continue;      // 非皮肤：一个字节都不动
+                    sk = (float)mv * (1.0f / 255.0f);
+                }
                 const size_t o = (rowOff + x) * 4;
-                const float sk = (float)mv * (1.0f / 255.0f);
 
                 float r = (float)dst[o + 0];
                 float g = (float)dst[o + 1];
@@ -612,18 +752,18 @@ void toneColor(unsigned char* dst, int w, int h,
                 // 顺序：清晰 → 美白 → 红润。参考实现侧没取到三段的确切顺序，
                 // 这个顺序保证「清晰抬对比不会把美白抬亮压平」（先结构后提亮）。
                 if (doClar) {
-                    r += (lc.at(kClarityLut5, 0, r) - r) * sk;
-                    g += (lc.at(kClarityLut5, 1, g) - g) * sk;
-                    b += (lc.at(kClarityLut5, 2, b) - b) * sk;
+                    r += (tab(tC[0], r) - r) * sk;
+                    g += (tab(tC[1], g) - g) * sk;
+                    b += (tab(tC[2], b) - b) * sk;
                 }
                 if (doWhiten) {
-                    r += (lw.at(kWhitenLut5, 0, r) - r) * sk;
-                    g += (lw.at(kWhitenLut5, 1, g) - g) * sk;
-                    b += (lw.at(kWhitenLut5, 2, b) - b) * sk;
+                    r += (tab(tW[0], r) - r) * sk;
+                    g += (tab(tW[1], g) - g) * sk;
+                    b += (tab(tW[2], b) - b) * sk;
                 }
                 if (doRosy) {
-                    g += dlt17(kRosyG17, g) * rosy * sk;
-                    b += dlt17(kRosyB17, b) * rosy * sk;
+                    g += tab(tG, g) * rosy * sk;
+                    b += tab(tB, b) * rosy * sk;
                 }
 
                 dst[o + 0] = (unsigned char)(r < 0 ? 0 : (r > 255.0f ? 255.0f : r + 0.5f));
@@ -632,6 +772,9 @@ void toneColor(unsigned char* dst, int w, int h,
             }
         }
     });
+    // 这条路径没碰 A（掩码模式下非皮肤像素必须原样保留，浮点模式也没顺带写过），
+    // 交回调用方兜底。
+    return false;
 }
 
 void toneWhitenRosy(unsigned char* dst, int w, int h,

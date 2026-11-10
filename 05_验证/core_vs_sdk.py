@@ -20,7 +20,7 @@ SDK 输出比。判据是**档位响应曲线**：用户拖滑块看到的是曲
 
 **能力边界（务必先读）**：本报告的 SDK 基准取自
 `goldens_legacy/flat/blur%03d_bt1/out.raw`，即 `ref_golden.dll` 显式下发
-`blur_type=1` 的输出。归档件 `docs/archive/ab-smooth-20261106.md` 已说明产品实际
+`blur_type=1` 的输出。归档件 `ab-smooth-20261106.md`（已删除） 已说明产品实际
 生效的不是 bt1 口径，所以这里的 RMSE **不能当作画质达标与否的判据**。78 组 flat
 同理是 SDK 快照，当前自研引擎与 `blur050_bt1` 实测 maxdiff=11、
 263782/1008640 个像素不同，本来就不该逐字节相等。
@@ -282,7 +282,7 @@ def main():
     md.append('2. **SDK 基准口径与产品不一致**。本表的 SDK 曲线取自 '
               '`goldens_legacy/flat/blur%03d_bt1/out.raw`，即 `ref_golden.dll` '
               '显式下发 `blur_type=1` 的输出；归档件 '
-              '`docs/archive/ab-smooth-20261106.md` 已说明产品实际生效的不是 bt1 口径，'
+              '`ab-smooth-20261106.md`（已删除） 已说明产品实际生效的不是 bt1 口径，'
               '因此这里的 RMSE 不能回答「画质达不达标」。本机 78 组实测中 `bt2` '
               '快照与当前引擎的差异最小，换基准后 RMSE 由 14.9 降到 5.0；'
               '但 5.0 仍高于经验阈值约 2，且基准该选哪组需用户确认，'

@@ -358,4 +358,14 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
                      const BandParams& p, const RoiRect& roi, int threads,
                      std::vector<float>& scratch);
 
+// 1.0.9.0：盒式的两个可调项（环境变量 BEAUTY_BOX_BLOCK / BEAUTY_BOX_MINPX），
+// 返回实际生效值，供 init 日志打印 —— 对照实验必须能证明「跑的是哪一档」。
+int boxBlockWidth();
+int boxMinPixels();
+// BEAUTY_PAR_COPY（默认 1）：ROI 外整帧拷贝是否按行并行。0 = 1.0.7.0 的串行写法。
+int parCopyOn();
+// BEAUTY_BOX_FUSE（默认 1，1.0.13.0）：磨皮低频层是否走「三通道融合 + SSE 垂直趟」。
+// 0 = 退回 1.0.12.0 的「3 通道各跑一遍 boxPlaneH/V」。两条路径逐位等价。
+int boxFuseOn();
+
 }  // namespace beautycore

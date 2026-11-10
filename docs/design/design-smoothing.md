@@ -5,14 +5,20 @@
 | 版本 | `1.0.0.0` |
 | 最后更新 | 2026-11-06 |
 | 适用代码版本 | CPU 线 `1.0.0.0`（结论已在 `01_源码/` 逐字复核） |
-| 维护人 | 待人工确认 |
+| 维护人 | Jian |
 | 状态 | `Active`（架构 / 开关有效；**历史轴实测数字未重测**） |
-| 替代文档 | 归档 `docs/archive/c02-edge-gate-20261106.md`、`c04-highlow-freq-20261106.md`、`c07-guided-filter-20261106.md`、`c08-lowfreq-compare-20261106.md`、`c15-box-lowpass-20261106.md` |
+| 替代文档 | 归档 `docs/archive/c02-edge-gate-20261106.md`（`Deprecated`）、`c04-highlow-freq-20261106.md`、`c07-guided-filter-20261106.md`、`c08-lowfreq-compare-20261106.md`、`c15-box-lowpass-20261106.md` |
+
+> **归档重建声明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件已按 `MANIFEST.tsv` 逐字恢复，
+> MD5 与字节数 38/38 一致；文首均标「ARCHIVED · 已废弃，见 xxx」，状态 `Deprecated`、**不得据此施工**。
+> 文中以 `docs/archive/` 开头的路径现在指向真实存在的归档件，读者可据此溯源，但不得当作现状引用。
+> 有效结论（含正向与负向／证伪结论）只在唯一 Active 文档留存一份，去向总表见
+> `docs/reference/reference-conclusions.md`；`docs/INDEX.md` §2 登记 38 行归档件。
 
 > **本文只保留结论 / 开关 / 坑 / 证伪 / 失效说明。**
 > 按 2026-11-06 裁定，**完全不搬历史轴的数字表格**：扫参表、保留率、耗时、加速比、SHA256
-> 一律只在归档件查。本文出现的数字**仅是源码中的开关取值 / 编译期默认值**，不是验收数据。
-> 归档件状态为 `Deprecated`、正文逐字保全，标「不得据此施工」。
+> 一律不进当前版，仓库内无逐字出处。本文出现的数字**仅是源码中的开关取值 / 编译期默认值**，不是验收数据。
+> 原归档件标 `Deprecated` 且「不得据此施工」；2026-11-10 重建于 `docs/archive/`，正文只在归档件留存。
 
 ---
 
@@ -28,7 +34,7 @@
 - 幅度门控上限是配置字段 `freqMagHi`；对应的环境变量是 **`BEAUTY_FREQ_MAG`**（格式 `lo,hi`）。
   ⚠️ **不存在 `BEAUTY_FREQ_MAG_HI` 这个开关**——历史文档写 `freqMagHi` 时指的是变量/字段，不是环境变量名。
 - **分离与合成必须留在全分辨率**（`c04` §7 的架构红线）；降采样方案已证伪，见 §3。
-- 不上 GPU：`docs/archive/tech-roadmap-20261106.md` §6「不做清单」第 1 条与当前纯 CPU 方向一致。
+- 不上 GPU：`docs/archive/tech-roadmap-20261106.md`（`Deprecated`） §6「不做清单」第 1 条与当前纯 CPU 方向一致。
   该件头注的 `S1/S2/S3` 是技术线路的**步骤编号**，不是 `ab-*` 对拍文档编号，引用时勿混。
 
 ## 2. 架构不变量（`c04` §7，改动前必读）
@@ -68,7 +74,7 @@
   **`BEAUTY_BOX_R` 调大是「减弱」不是增强**——低通越糊、`|src−low|` 幅度越大，越容易被 `magHi` 门控拦住。
 - **不要动 `freqMagHi` 去追强度**，那是把真边缘也一起放开。
 - `c15` §3 三条反直觉结论与 §9 调参顺序、§6「ROI 版与全帧版差 1 灰阶」的对齐 bug 仍适用；
-  具体数值见归档件 `docs/archive/c15-box-lowpass-20261106.md`。
+  具体数值见归档件 `docs/archive/c15-box-lowpass-20261106.md`（`Deprecated`）。
 - 落地函数是 `boxRgbRoi()`（`beauty_smooth.cpp` / `beauty_smooth.h`），当前源码仍在。
 
 ## 6. 开关清单（均为 `01_源码/` 中实存名字）
@@ -93,21 +99,21 @@
 
 | 归档件 | 本文引用的内容 |
 |---|---|
-| `docs/archive/c02-edge-gate-20261106.md` | §2 三个坑、§4 椭圆 mask 证伪、`BEAUTY_EDGE_K` |
-| `docs/archive/c04-highlow-freq-20261106.md` | §7 架构不变量与红线、§2 三个实现选择、低频/门控开关 |
-| `docs/archive/c07-guided-filter-20261106.md` | 引导滤波在 CPU 上不划算、默认关闭、回退开关 |
-| `docs/archive/c08-lowfreq-compare-20261106.md` | 两条低频路线证伪、指标口径坑、代码保留理由 |
-| `docs/archive/c15-box-lowpass-20261106.md` | 盒式低通落地、调参顺序、反直觉结论、ROI 对齐 bug |
-| `docs/archive/oss-survey-20261106.md` | §7.7 两项无收益结论（**只取这一节**，不取 GPU 化论证） |
-| `docs/archive/ab-smooth-20261106.md` | 降采样失败、引导滤波未赢过双边、曲线拟合 ≠ 结构同一性 |
-| `docs/archive/tech-roadmap-20261106.md` | §6「不上 GPU」结论；`S1/S2/S3` 命名陷阱 |
+| `docs/archive/c02-edge-gate-20261106.md`（`Deprecated`） | §2 三个坑、§4 椭圆 mask 证伪、`BEAUTY_EDGE_K` |
+| `docs/archive/c04-highlow-freq-20261106.md`（`Deprecated`） | §7 架构不变量与红线、§2 三个实现选择、低频/门控开关 |
+| `docs/archive/c07-guided-filter-20261106.md`（`Deprecated`） | 引导滤波在 CPU 上不划算、默认关闭、回退开关 |
+| `docs/archive/c08-lowfreq-compare-20261106.md`（`Deprecated`） | 两条低频路线证伪、指标口径坑、代码保留理由 |
+| `docs/archive/c15-box-lowpass-20261106.md`（`Deprecated`） | 盒式低通落地、调参顺序、反直觉结论、ROI 对齐 bug |
+| `docs/archive/oss-survey-20261106.md`（`Deprecated`） | §7.7 两项无收益结论（**只取这一节**，不取 GPU 化论证） |
+| `docs/archive/ab-smooth-20261106.md`（`Deprecated`） | 降采样失败、引导滤波未赢过双边、曲线拟合 ≠ 结构同一性 |
+| `docs/archive/tech-roadmap-20261106.md`（`Deprecated`） | §6「不上 GPU」结论；`S1/S2/S3` 命名陷阱 |
 
 ## 9. 待人工确认
 
 1. 本文结论来自归档头登记 + 当前源码逐字复核，**未在 CPU `1.0.0.0` 上重跑 golden A/B 与性能 A/B**。
 2. `c15` 的三条反直觉结论、`c02` 门控灵敏度是否在新轴上仍成立，需逐项复核。
 3. `c21` 登记的高档位细纹理矫枉过正、阴影频带双尺度缺口是否仍存在，见 `docs/design/design-face-mask.md`。
-4. 文档维护人待指定。
+4. ~~文档维护人待指定~~ ✅ 已指定：`Jian`（2026-11-09）。
 
 ---
 

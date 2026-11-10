@@ -5,14 +5,20 @@
 | 版本 | `1.0.0.2` |
 | 最后更新 | 2026-11-06 |
 | 适用代码版本 | CPU 线 `1.0.0.2`（§1–§7 为历史轴归档头登记的结论；当前轴已完成两轮覆盖 8 帧判据的画质离线复测，含建议项未通过，见 §8.1 / §8.2；仍未构成验收）。**`1.0.0.2` 默认开启人脸框 EMA，复现本文任何 A/B 须加 `BEAUTY_FACE_EMA=0 BEAUTY_FACE_HOLD=0`，见 §8.3** |
-| 维护人 | 待人工确认 |
+| 维护人 | Jian |
 | 状态 | `Active`（**方法论与证伪链有效；所有历史实测数字不进本文**） |
-| 替代文档 | 归档 `docs/archive/c14-quality-gap-20261106.md`、`c16-spot-samples-20261106.md`、`c17-param-sweep-falsify-20261106.md`、`c18-scale-dependency-20261106.md`、`c19-camera-scale-ab-20261106.md`；并引用 `ab-metric` / `ab-smooth` / `c20` / `c21` |
+| 替代文档 | 归档 `docs/archive/c14-quality-gap-20261106.md`（`Deprecated`）、`c16-spot-samples-20261106.md`、`c17-param-sweep-falsify-20261106.md`、`c18-scale-dependency-20261106.md`、`c19-camera-scale-ab-20261106.md`；并引用 `ab-metric` / `ab-smooth` / `c20` / `c21` |
+
+> **归档重建声明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件已按 `MANIFEST.tsv` 逐字恢复，
+> MD5 与字节数 38/38 一致；文首均标「ARCHIVED · 已废弃，见 xxx」，状态 `Deprecated`、**不得据此施工**。
+> 文中以 `docs/archive/` 开头的路径现在指向真实存在的归档件，读者可据此溯源，但不得当作现状引用。
+> 有效结论（含正向与负向／证伪结论）只在唯一 Active 文档留存一份，去向总表见
+> `docs/reference/reference-conclusions.md`；`docs/INDEX.md` §2 登记 38 行归档件。
 
 > **本文只保留结论 / 开关 / 坑 / 证伪 / 失效说明。**
 > 按 2026-11-06 裁定，**完全不搬历史轴的数字表格**：保留率、百分点、灰阶、倍数、
-> 残留%、耗时一律只在归档件查。本文出现的数字**仅是档位条件 / 开关取值**，不是验收数据。
-> 归档件状态为 `Deprecated`、正文逐字保全，标「不得据此施工」。
+> 残留%、耗时不进当前版，仓库内无逐字出处。本文出现的数字**仅是档位条件 / 开关取值**，不是验收数据。
+> 原归档件标 `Deprecated` 且「不得据此施工」；2026-11-10 重建于 `docs/archive/`，正文只在归档件留存。
 
 ---
 
@@ -46,7 +52,7 @@
 
 - **产品真值档 = 不下发 `blur_type`**，等价 bundle 裸默认 `bt2`。第三方产品从不下发
   该参数；`ref_golden.dll` 显式下发 `bt1` 生成的 `goldens_legacy/flat/` 快照不是
-  产品真值 (`docs/archive/ab-smooth-20261106.md`)。`01_源码/beauty_core.cpp` 在
+  产品真值 (`docs/archive/ab-smooth-20261106.md`（`Deprecated`）)。`01_源码/beauty_core.cpp` 在
   `smoothModel` 默认值旁亦写明「加密 bundle、不下发 blur_type = bt2」。
 - 因此 `05_验证/real_frame_eval.py` 做对齐对拍必须显式传 `--gold-bt -1`；默认值 1
   只为兼容旧资产。产品真值金标的文件名后缀是 `_btM1`（`bt_suffix(-1)`），
@@ -57,7 +63,7 @@
   1.25~1.45、75 与 100 档输出必须不同、100 档 RMSE < 2.0、空间相关 ≥ 0.80，
   并建议把 flat/tex 门槛由 ≥ 1.0 提高到 ≥ 1.25。原件见
   `04_文档/01_第三方磨皮真值.md`（`.gitignore` §10 排除件、不入库）与
-  `docs/archive/ab-smooth-20261106.md` 更正块。
+  `docs/archive/ab-smooth-20261106.md`（`Deprecated`） 更正块。
 - ⚠️ **量纲隔离**：上款的 RMSE 是真机帧**掩码内的像素级** RMSE，由
   `05_验证/real_frame_eval.py` 计算；`05_验证/core_vs_sdk.py` 报的则是 `face_src`
   合成图上「档位细节保留率曲线」的**百分点** RMSE。两者素材、量纲、代码轴都不同，
@@ -108,11 +114,11 @@
 ## 6. 失效说明（不得据此施工）
 
 - 归档件全部是历史轴 `3.1.x / CoreEngine 0.x` 口径，**非当前 CPU `1.0.0.0`**；
-  所有历史验收数字按 2026-11-06 裁定**不长期保留在当前版**，原件只读保全。
+  所有历史验收数字按 2026-11-06 裁定**不长期保留在当前版**，原件见 `docs/archive/`，不进当前版。
 - 路径 `00_源码` → `01_源码`、`06_离线验证` → `05_验证`、`07_历史文档/COMPARE_3.0.19_vs_第三方.md`
   与 `D:/插件/OBS美颜/06_离线验证` 均不存在；`noise_floor.py` / `neck_sweep.py` 现位于 `05_验证/`。
 - `c17` 的 `beauty_core.cpp` 行号、原 `S3_对拍口径修正_结论.md` 路径（已归档为
-  `docs/archive/ab-metric-20261106.md`）均已失效。
+  `docs/archive/ab-metric-20261106.md`（`Deprecated`））均已失效。
 - `c16` 的 `delspot_level` 参数配方解读属**历史轴推测**，不是当前结论。
 - ⚠️ `ab-mask` / `ab-smooth` / `ab-metric` 三篇的 `S1/S2/S3` 是**对拍文档编号**，
   `tech-roadmap` §4 的 `S1/S2/S3` 是**技术线路步骤编号**，同名异义，不得混淆。
@@ -121,14 +127,14 @@
 
 | 归档件 | 本文引用的内容 |
 |---|---|
-| `docs/archive/c14-quality-gap-20261106.md` | §5 五条被证伪假设、§4 与 `ab-metric` 的口径差异 |
-| `docs/archive/c16-spot-samples-20261106.md` | 痘印不是差距来源、祛斑痘默认值、合成阳性样本方法论 |
-| `docs/archive/c17-param-sweep-falsify-20261106.md` | 「档位→尺度联动」证伪、`freqMagHi` 主导、指标 ≠ 观感、双尺度缺口未实施 |
-| `docs/archive/c18-scale-dependency-20261106.md` | 核尺度为绝对像素常量、可比性风险、插值假象 |
-| `docs/archive/c19-camera-scale-ab-20261106.md` | **只取方法论**；根因结论已被 `c20` 推翻 |
-| `docs/archive/c20-whitebalance-rootcause-20261106.md` / `c21-adaptive-skin-center-20261106.md` | 证伪链终点、四项局限、三项遗留 |
-| `docs/archive/ab-metric-20261106.md` | 口径稀释、比较区域污染、样本量局限 |
-| `docs/archive/ab-smooth-20261106.md` / `ab-mask-20261106.md` | bt1 ≠ 产品真值、曲线拟合 ≠ 结构同一性、单张脸扰动 |
+| `docs/archive/c14-quality-gap-20261106.md`（`Deprecated`） | §5 五条被证伪假设、§4 与 `ab-metric` 的口径差异 |
+| `docs/archive/c16-spot-samples-20261106.md`（`Deprecated`） | 痘印不是差距来源、祛斑痘默认值、合成阳性样本方法论 |
+| `docs/archive/c17-param-sweep-falsify-20261106.md`（`Deprecated`） | 「档位→尺度联动」证伪、`freqMagHi` 主导、指标 ≠ 观感、双尺度缺口未实施 |
+| `docs/archive/c18-scale-dependency-20261106.md`（`Deprecated`） | 核尺度为绝对像素常量、可比性风险、插值假象 |
+| `docs/archive/c19-camera-scale-ab-20261106.md`（`Deprecated`） | **只取方法论**；根因结论已被 `c20` 推翻 |
+| `docs/archive/c20-whitebalance-rootcause-20261106.md`（`Deprecated`） / `c21-adaptive-skin-center-20261106.md` | 证伪链终点、四项局限、三项遗留 |
+| `docs/archive/ab-metric-20261106.md`（`Deprecated`） | 口径稀释、比较区域污染、样本量局限 |
+| `docs/archive/ab-smooth-20261106.md`（`Deprecated`） / `ab-mask-20261106.md` | bt1 ≠ 产品真值、曲线拟合 ≠ 结构同一性、单张脸扰动 |
 
 ## 8. 待人工确认
 
@@ -138,7 +144,7 @@
    往返，**不改变「当前轴未验收」的状态**。
 2. `c18` §5 的 `NamaGoldenRun`（历史轴离线脚本，非插件源码符号）后四参数与真机第三方默认配置**从未核实**，需补齐后才能做任何跨实现定量对比。
 3. `c21` 三项遗留、祛斑痘默认值是否该调整，需在当前轴上复核后再决定，不得据本文施工。
-4. 文档维护人待指定。
+4. ~~文档维护人待指定~~ ✅ 已指定：`Jian`（2026-11-09）。
 
 ### 8.1 产品真值画质复测（2026-11-06 · 8 帧判据复测 · 待人工确认）
 

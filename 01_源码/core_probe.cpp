@@ -10,6 +10,7 @@
 //     outMaskPath 写「8 字节头（int32 mw, int32 mh）+ mw*mh 字节掩码」，
 //     与 golden_capture.cpp 的 BeautyDumpMask 同一格式，可直接互相比较。
 
+#include "beauty_env.h"   // beauty_env()：BEAUTY_* 覆盖的唯一入口（1.0.13.10 C-2/C-3）
 #include "beauty_core.h"
 
 #include <cstdarg>
@@ -63,10 +64,12 @@ double g_shape[3] = {0, 0, 0};
 
 extern "C" {
 
-__declspec(dllexport) int __stdcall BeautyCoreRun(
-    const char* rawIn, const char* rawOut, int width, int height,
-    double blur, int radius, float sigmaSpace, float sigmaColor, int down,
-    char* msgBuf, int msgCap) {
+// 真正的实现。slot 由调用方给：双实例台架要能分别驱动两个上下文，
+// 单实例入口 BeautyCoreRun 只是「领一个 slot 再调它」。
+static int runCoreSlot(int slot, const char* rawIn, const char* rawOut,
+                       int width, int height, double blur, int radius,
+                       float sigmaSpace, float sigmaColor, int down,
+                       char* msgBuf, int msgCap) {
     if (msgBuf && msgCap > 0) msgBuf[0] = 0;
     if (!rawIn || !rawOut || width <= 0 || height <= 0) {
         setMsg(msgBuf, msgCap, "bad args");
@@ -75,7 +78,7 @@ __declspec(dllexport) int __stdcall BeautyCoreRun(
     // 强制走自研引擎（无论外部环境怎么设）
     // 离线对拍默认走**同步**检测：异步的「第 k 帧用哪份掩码」取决于线程调度，
     // 逐字节哈希会飘。要测异步就由调用方显式传 BEAUTY_ASYNC_DETECT=1。
-    if (!getenv("BEAUTY_ASYNC_DETECT")) _putenv_s("BEAUTY_ASYNC_DETECT", "0");
+    if (!beauty_env("BEAUTY_ASYNC_DETECT")) _putenv_s("BEAUTY_ASYNC_DETECT", "0");
     _putenv_s("BEAUTY_ENGINE_IMPL", "core");
 
     const std::string inA = utf8ToAcp(rawIn);
@@ -129,17 +132,8 @@ __declspec(dllexport) int __stdcall BeautyCoreRun(
             return 9;
         }
     }
-    if (g_slot < 0) {
-        std::string err;
-        g_slot = e.acquireSlot(err);
-        if (g_slot < 0) {
-            setMsg(msgBuf, msgCap, "acquireSlot failed: %s", err.c_str());
-            return 6;
-        }
-    }
-
     std::vector<unsigned char> out(need);
-    if (!e.process(g_slot, &buf[0], &out[0], width, height, s)) {
+    if (!e.process(slot, &buf[0], &out[0], width, height, s)) {
         setMsg(msgBuf, msgCap, "process failed");
         return 7;
     }
@@ -153,6 +147,63 @@ __declspec(dllexport) int __stdcall BeautyCoreRun(
            e.id(), blur, e.lastCoreMs(), e.lastFaces(), e.regionActive() ? 1 : 0,
            e.lastErr());
     return 0;
+}
+
+// 新领一个实例槽位（双实例台架用）。返回 -1 表示失败，原因在 msgBuf。
+__declspec(dllexport) int __stdcall BeautyCoreAcquireSlot(char* msgBuf, int msgCap) {
+    if (msgBuf && msgCap > 0) msgBuf[0] = 0;
+    _putenv_s("BEAUTY_ENGINE_IMPL", "core");
+    IBeautyEngine& e = beautyEngine();
+    std::string ierr;
+    if (!e.ensureReady(ierr)) {
+        setMsg(msgBuf, msgCap, "ensureReady failed: %s", ierr.c_str());
+        return -1;
+    }
+    std::string err;
+    const int s = e.acquireSlot(err);
+    if (s < 0) {
+        setMsg(msgBuf, msgCap, "acquireSlot failed: %s", err.c_str());
+        return -1;
+    }
+    setMsg(msgBuf, msgCap, "OK slot=%d", s);
+    return s;
+}
+
+// 按指定 slot 跑一帧（生产入口 process()）。
+__declspec(dllexport) int __stdcall BeautyCoreRunSlot(
+    int slot, const char* rawIn, const char* rawOut, int width, int height,
+    double blur, int radius, float sigmaSpace, float sigmaColor, int down,
+    char* msgBuf, int msgCap) {
+    if (slot < 0) {
+        setMsg(msgBuf, msgCap, "bad slot");
+        return 6;
+    }
+    return runCoreSlot(slot, rawIn, rawOut, width, height, blur, radius,
+                       sigmaSpace, sigmaColor, down, msgBuf, msgCap);
+}
+
+// 单实例入口：保持旧签名不变（既有台架脚本都在用它），内部懒领一个 slot。
+__declspec(dllexport) int __stdcall BeautyCoreRun(
+    const char* rawIn, const char* rawOut, int width, int height,
+    double blur, int radius, float sigmaSpace, float sigmaColor, int down,
+    char* msgBuf, int msgCap) {
+    _putenv_s("BEAUTY_ENGINE_IMPL", "core");
+    IBeautyEngine& e = beautyEngine();
+    std::string ierr;
+    if (!e.ensureReady(ierr)) {
+        setMsg(msgBuf, msgCap, "ensureReady failed: %s", ierr.c_str());
+        return 9;
+    }
+    if (g_slot < 0) {
+        std::string err;
+        g_slot = e.acquireSlot(err);
+        if (g_slot < 0) {
+            setMsg(msgBuf, msgCap, "acquireSlot failed: %s", err.c_str());
+            return 6;
+        }
+    }
+    return runCoreSlot(g_slot, rawIn, rawOut, width, height, blur, radius,
+                       sigmaSpace, sigmaColor, down, msgBuf, msgCap);
 }
 
 // 性能开关：在 BeautyCoreRun 之前调用，控制线程数与 ROI 裁剪。
@@ -229,6 +280,85 @@ __declspec(dllexport) void __stdcall BeautyCoreSetShape(int idx, double v) {
     if (idx >= 0 && idx < 3) g_shape[idx] = v;
 }
 
+// slot 版掩码导出（双实例台架用）。格式与 BeautyCoreMask 完全一致。
+__declspec(dllexport) int __stdcall BeautyCoreMaskSlot(
+    int slot, const char* rawIn, int width, int height,
+    const char* outMask, char* msgBuf, int msgCap) {
+    if (msgBuf && msgCap > 0) msgBuf[0] = 0;
+    if (!rawIn || !outMask || width <= 0 || height <= 0 || slot < 0) {
+        setMsg(msgBuf, msgCap, "bad args");
+        return 2;
+    }
+    if (!beauty_env("BEAUTY_ASYNC_DETECT")) _putenv_s("BEAUTY_ASYNC_DETECT", "0");
+    _putenv_s("BEAUTY_ENGINE_IMPL", "core");
+
+    const std::string inA = utf8ToAcp(rawIn);
+    const std::string outA = utf8ToAcp(outMask);
+    const size_t need = (size_t)width * (size_t)height * 4;
+
+    FILE* f = nullptr;
+    if (fopen_s(&f, inA.c_str(), "rb") != 0 || !f) {
+        setMsg(msgBuf, msgCap, "cannot open input: %s", inA.c_str());
+        return 3;
+    }
+    std::vector<unsigned char> buf(need);
+    const size_t got = fread(&buf[0], 1, need, f);
+    fclose(f);
+    if (got != need) {
+        setMsg(msgBuf, msgCap, "input too short: got %zu of %zu", got, need);
+        return 4;
+    }
+
+    IBeautyEngine& e = beautyEngine();
+    {
+        std::string ierr;
+        if (!e.ensureReady(ierr)) {
+            setMsg(msgBuf, msgCap, "ensureReady failed: %s", ierr.c_str());
+            return 6;
+        }
+    }
+
+    std::vector<unsigned char> mask((size_t)width * (size_t)height, 0);
+    const bool ok = beautyCoreComputeMaskSlot(slot, &buf[0], width, height, &mask[0]);
+    if (!ok) {
+        setMsg(msgBuf, msgCap, "no mask this frame (%s)", e.lastErr());
+        return 7;
+    }
+
+    if (fopen_s(&f, outA.c_str(), "wb") != 0 || !f) {
+        setMsg(msgBuf, msgCap, "cannot write mask: %s", outA.c_str());
+        return 8;
+    }
+    int hdr[2] = {width, height};
+    fwrite(hdr, sizeof(int), 2, f);
+    fwrite(&mask[0], 1, (size_t)width * (size_t)height, f);
+    fclose(f);
+
+    size_t px = 0;
+    for (size_t i = 0, n = (size_t)width * (size_t)height; i < n; i++)
+        if (mask[i]) px++;
+    setMsg(msgBuf, msgCap, "OK mask=%dx%d px=%zu (%.2f%%) faces=%d",
+           width, height, px,
+           100.0 * (double)px / (double)((size_t)width * (size_t)height),
+           e.lastFaces());
+    return 0;
+}
+
+// 探针：把某个 slot 最近一次检测到的人脸几何（框 + 倾斜 + 5 个关键点）打成文本。
+// 用途：排查美形「形变落点」—— 位移场完全由这些数决定，看不到就没有判据。
+// 调用顺序必须是先 BeautyCoreMaskSlot / BeautyCoreRunSlot 跑一帧，再调本函数。
+__declspec(dllexport) int __stdcall BeautyCoreFaceSlot(
+    int slot, char* msgBuf, int msgCap) {
+    if (!msgBuf || msgCap <= 0) return -1;
+    msgBuf[0] = 0;
+    const int n = beautyCoreDumpFaceSlot(slot, msgBuf, msgCap);
+    if (n < 0) {
+        setMsg(msgBuf, msgCap, "engine is not core");
+        return -1;
+    }
+    return n;
+}
+
 // 把自研引擎这一帧的掩码落盘，格式与 BeautyDumpMask 一致
 // （8 字节头：int32 mw, int32 mh；随后 mw*mh 字节 0/255）。
 //
@@ -244,7 +374,7 @@ __declspec(dllexport) int __stdcall BeautyCoreMask(
     }
     // 离线对拍默认走**同步**检测：异步的「第 k 帧用哪份掩码」取决于线程调度，
     // 逐字节哈希会飘。要测异步就由调用方显式传 BEAUTY_ASYNC_DETECT=1。
-    if (!getenv("BEAUTY_ASYNC_DETECT")) _putenv_s("BEAUTY_ASYNC_DETECT", "0");
+    if (!beauty_env("BEAUTY_ASYNC_DETECT")) _putenv_s("BEAUTY_ASYNC_DETECT", "0");
     _putenv_s("BEAUTY_ENGINE_IMPL", "core");
 
     const std::string inA = utf8ToAcp(rawIn);

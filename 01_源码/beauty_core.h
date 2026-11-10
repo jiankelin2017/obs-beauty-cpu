@@ -63,6 +63,18 @@ public:
     virtual int          lastFaces() const = 0;
     virtual bool         regionActive() const = 0;
     virtual double       lastCoreMs() const = 0;
+    // 1.0.9.0：本帧的分段耗时（ms），out 至少 6 项：
+    //   0=检测+掩码  1=磨皮  2=色调(清晰/美白/红润)+五官  3=细节回填  4=美形+A通道  5=保留
+    // 给非纯虚实现，别的引擎（null / legacy）不用改也能编译。
+    virtual void lastStageMs(double* out6) const { (void)out6; }
+    // 1.0.10.0：最近一帧的 ROI 尺寸与掩码像素数。两次录制的「引擎耗时」只有在
+    // ROI 面积可比时才可比 —— 脸离镜头近一倍，磨皮面积就是四倍。
+    virtual void lastRoi(int* rw, int* rh, int* px) const
+    {
+        if (rw) *rw = 0;
+        if (rh) *rh = 0;
+        if (px) *px = 0;
+    }
     virtual const char*  lastErr() const = 0;
     virtual int          itemId() const = 0;
     virtual unsigned long ownerThread() const = 0;
@@ -156,6 +168,19 @@ uint64_t beautyCoreNoFaceFrames();
 // 否则排查「无人时还是卡」时无从判断是没生效还是被回退开关关掉了。
 int beautyCoreNoFaceSkip();
 
+// 1.0.5.0：头歪补偿（±45° 倾斜探测）是否启用（1 = 开，默认；0 = `BEAUTY_AUTO_ROLL=0`）。
+// 与 beautyCoreNoFaceSkip 同一用途：给 init 日志留一位，证明手上这份构建真的带
+// 这个功能、且没被环境变量关掉。排查「歪头没效果」时不用再猜。
+int beautyCoreAutoRoll();
+
+// 1.0.7.0：脖子通道是否启用（1 = 开，默认；0 = `BEAUTY_NECK=0`）。
+// init 日志多一位 neck=，用来分辨「这份二进制有没有 1.0.7.0 的方向重画」。
+int beautyCoreNeckOn();
+
+// 1.0.10.0：A 通道是否由引擎负责（1 = 默认；0 = `BEAUTY_ALPHA_IN_ENGINE=0`，
+// 回到 1.0.7.0 的分工，插件在上传段自己跑一遍）。插件侧据此决定要不要补那遍。
+int beautyCoreAlphaInEngine();
+
 // 掩码导出（仅供离线对拍）
 //
 // 为什么要这个：自研引擎只磨「肤色 ∩ 人脸框」那 5% 左右，而 参考实现的改动区有
@@ -182,8 +207,16 @@ const char* beautyCoreSkinInfo();
 // 返回的指针指向静态缓冲，只在本线程打日志用。
 bool beautyCoreSkinAnnounce();
 
+// slot 版：双实例台架要能分别驱动两个上下文，默认那版固定用 slot 0。
+// slot 越界一律兜到 0，与 process() 的口径一致。
+bool beautyCoreComputeMaskSlot(int slot, const unsigned char* src, int w, int h,
+                               unsigned char* outMask);
 bool beautyCoreComputeMask(const unsigned char* src, int w, int h,
                            unsigned char* outMask);
+
+// 探针专用：把 slot 里最近一次检测到的人脸几何写进 buf（文本）。
+// 返回人脸个数，-1 = 引擎不是 core。仅用于离线排查「形变落点」。
+int beautyCoreDumpFaceSlot(int slot, char* buf, int cap);
 //
 //   legacy      LegacyAdapter（仅离线基准 DLL） —— 与本次改动前逐位相同的行为
 //   passthrough          直通，用于验证开关与降级

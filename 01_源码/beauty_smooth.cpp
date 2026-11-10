@@ -10,15 +10,21 @@
 //   6) 边界用 clamp（复制边缘像素）。与 OpenCV 的 BORDER_REFLECT 略有差异，
 //      但对拍比较的是画面中心区域，边界差异不影响结论。
 
+#include "beauty_env.h"   // beauty_env()：BEAUTY_* 覆盖的唯一入口（1.0.13.10 C-2/C-3）
 #include "beauty_smooth.h"
 #include "beauty_pool.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <thread>
 #include <vector>
+
+// 1.0.13.0：垂直盒式改成 SSE 一次算 4 列。只用到 SSE2 的 add/sub/mul/loadu，
+// 不需要 AVX —— 与 beauty_core.cpp 的 forceOpaque 保持同一档依赖。
+#include <emmintrin.h>
 
 namespace beautycore {
 
@@ -65,6 +71,67 @@ int effectiveThreads(int threads, int rows) {
     const int byRows = rows / 16;   // 每线程至少 16 行
     if (n > byRows) n = byRows;
     return (n < 1) ? 1 : n;
+}
+
+// 1.0.9.0：列块宽（同时是并行粒度）与「低于多少像素就退回单线程」都做成可调。
+// 目的：真机上这两个值的最优点与离线台架不同（台架没有编码器抢核），
+// 需要在**装一次 DLL** 的前提下做多组对照 —— 否则每试一组都要过一次 UAC。
+//   BEAUTY_BOX_BLOCK=32     回到 1.0.7.0 的粒度（块=128 字节=2 条 cache line）
+//   BEAUTY_BOX_MINPX=150000 回到 1.0.7.0 的退化阈值
+// 默认值与 1.0.8.0 出厂设置一致，不设环境变量时行为不变。
+int beautyBoxBlock()
+{
+    static const int v = []() {
+        const char* e = beauty_env("BEAUTY_BOX_BLOCK");
+        int n = (e && *e) ? atoi(e) : 8;
+        if (n < 4) n = 4;
+        if (n > 256) n = 256;
+        return n;
+    }();
+    return v;
+}
+
+int beautyBoxMinPx()
+{
+    static const int v = []() {
+        const char* e = beauty_env("BEAUTY_BOX_MINPX");
+        int n = (e && *e) ? atoi(e) : 8192;
+        if (n < 0) n = 0;
+        return n;
+    }();
+    return v;
+}
+
+// BEAUTY_PAR_COPY=0 → ROI 外的整帧拷贝退回单线程（1.0.7.0 的写法）。
+bool parCopyEnabled()
+{
+    static const bool v = []() {
+        const char* e = beauty_env("BEAUTY_PAR_COPY");
+        return !(e && *e == '0');
+    }();
+    return v;
+}
+
+// BEAUTY_BOX_FUSE=0 → 磨皮低频层退回「3 通道各跑一遍 boxPlaneH/V」（1.0.12.0 的写法）。
+// 默认开。两条路径逐位等价（见 boxRgbH3 / boxRgbV3 的注释），开关只为对照测速。
+bool boxFuseEnabled()
+{
+    static const bool v = []() {
+        const char* e = beauty_env("BEAUTY_BOX_FUSE");
+        return !(e && *e == '0');
+    }();
+    return v;
+}
+
+// BEAUTY_BOX_TRACE=1 → 每次进 boxRgbRoi 往 stderr 打一行 ROI 与参数。
+// 只为回答「台架里这段到底跑没跑、参数是多少」——分段计时器在外面看不到这里。
+bool boxTraceEnabled()
+{
+    static const bool v = []() {
+        const char* e = beauty_env("BEAUTY_BOX_TRACE");
+        return (e && *e == '1');
+    }();
+    return v;
 }
 
 }  // namespace
@@ -366,11 +433,19 @@ void boxPlaneH(const float* src, float* dst, int bw, int bh, int r, int threads)
 
 // 单平面垂直盒式滤波。**按列分块**：逐列扫的话每读 4 字节要跳一整行
 // （1080p 的 ROI 上一行 1.8 KB），缓存全废 —— 实测这一步单独就吃掉 1.5ms 以上。
-// 改成一次处理 32 列（= 128 字节 = 2 条 cache line），行内是连续的，
-// 每行的有效载荷从 4 字节涨到 128 字节，涨 32 倍。
+// 改成一次处理 kColBlock 列，行内是连续的，每行的有效载荷从 4 字节涨到 32 字节。
+//
+// 1.0.8.0：kBlock 32 → 8。块宽同时是**并行粒度**（下面 runRange 的任务数 =
+// nblk = bw/kBlock），32 列时半分辨率 ROI（bw≈384）只有 12 个任务，runRange 的
+// 「每线程至少 16 行」直接把它判成单线程 —— 垂直 pass 一直是全程单线程，
+// 而这正是磨皮里最重的一段（13 平面 × 3 趟 × 3 组）。降到 8 列后同样宽度有
+// 48 个任务，能开 3~6 线程；代价是每次错过的 cache line 从 0 变成一半
+// （8 列 = 32 字节，一行 64 字节），实测仍是净赚（见 CHANGELOG 1.0.8.0）。
+// **分块方式不改变任何像素的结果**：每块自己维护列和、kFlush 重算点仍按全局 y，
+// 块与块之间没有数据依赖。
 void boxPlaneV(const float* src, float* dst, int bw, int bh, int r, int threads) {
     const float inv = 1.0f / (float)(2 * r + 1);
-    const int kBlock = 32;
+    const int kBlock = beautyBoxBlock();
     const int kFlush = 32;   // 同 boxPlaneH：定期重算列和，防 float 误差累积
     const int nblk = (bw + kBlock - 1) / kBlock;
     runRange(0, nblk, threads, [&](int bBegin, int bEnd) {
@@ -401,6 +476,136 @@ void boxPlaneV(const float* src, float* dst, int bw, int bh, int r, int threads)
         }
     });
 }
+
+// ── 1.0.13.0：三通道融合盒式（B1）+ 垂直趟 SSE（B2）─────────────────────────
+//
+// 为什么做：磨皮低频层对 3 个通道各跑 2 轮 H+V = 12 趟 box。每趟是滑动窗，
+// O(1)/像素，但**每像素仍要算两次 clampi 与一次 x%32**，3 个通道各算一遍，
+// 等于同一份索引工作重复了 3 次。实测每像素每趟约 8 个周期，而滑动窗真正
+// 必需（2 load + 1 store + sub + add + mul）只占 5 个 —— 剩下都是索引与分支。
+// 带宽不是瓶颈：全帧 24 MB / 40 GB/s 只需 0.6 ms，实测却是 5.3 ms。
+//
+// 两个改动的共同前提：**逐位等价**。判据是「每个像素每个通道的 float 累加
+// 序列必须一模一样」，而不是「数学上等价」——
+//   · 水平趟：把 p 循环从 x 外面搬到 x 里面，s0/s1/s2 三个累加器各自仍然按
+//     kFlush 重算、仍然按 (add, rem) 增量，加法次序一个字都没变。
+//   · 垂直趟：SSE 的 add/sub 是 IEEE 单精度逐 lane 运算，(s + (a - r)) 与标量
+//     写的 s += a - r 完全同序；没有乘法融合（这里没有 FMA 形态），所以也不
+//     存在「fma 少一次舍入」的差异。
+// 真正的差异只有一条：**循环的组织形式**。
+
+// 三平面水平盒式。kFlush 重算点仍然落在 x % 32 == 0 上（下面用倒数计数器实现，
+// 结果与取模完全相同，只是省掉每像素一次整数除法/位与）。
+static void boxRgbH3(const float* const* src, float* const* dst,
+                     int bw, int bh, int r, int threads) {
+    const float inv = 1.0f / (float)(2 * r + 1);
+    const int kFlush = 32;
+    runRange(0, bh, threads, [&](int yBegin, int yEnd) {
+        for (int y = yBegin; y < yEnd; y++) {
+            const size_t base = (size_t)y * bw;
+            const float* p0 = src[0] + base;
+            const float* p1 = src[1] + base;
+            const float* p2 = src[2] + base;
+            float* o0 = dst[0] + base;
+            float* o1 = dst[1] + base;
+            float* o2 = dst[2] + base;
+            float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f;
+            int since = 0;   // 距上次重算已滑过的像素数
+            for (int x = 0; x < bw; x++) {
+                if (since == 0) {
+                    s0 = s1 = s2 = 0.0f;
+                    for (int k = -r; k <= r; k++) {
+                        const int i = clampi(x + k, 0, bw - 1);
+                        s0 += p0[i];
+                        s1 += p1[i];
+                        s2 += p2[i];
+                    }
+                    since = kFlush;
+                }
+                o0[x] = s0 * inv;
+                o1[x] = s1 * inv;
+                o2[x] = s2 * inv;
+                const int add = clampi(x + r + 1, 0, bw - 1);
+                const int rem = clampi(x - r, 0, bw - 1);
+                s0 += p0[add] - p0[rem];
+                s1 += p1[add] - p1[rem];
+                s2 += p2[add] - p2[rem];
+                since--;
+            }
+        }
+    });
+}
+
+// 三平面垂直盒式。分块策略与 boxPlaneV 相同（kBlock 列一块），块内一次算 4 列。
+// 尾部不足 4 列的走标量（bw 往往不是 4 的倍数，比如 552 是，但 529 不是）。
+static void boxRgbV3(const float* const* src, float* const* dst,
+                     int bw, int bh, int r, int threads) {
+    const float inv = 1.0f / (float)(2 * r + 1);
+    const int kBlock = beautyBoxBlock();
+    const int kFlush = 32;
+    const int nblk = (bw + kBlock - 1) / kBlock;
+    const __m128 vinv = _mm_set1_ps(inv);
+    runRange(0, nblk, threads, [&](int bBegin, int bEnd) {
+        std::vector<float> sum((size_t)kBlock * 3);
+        for (int b = bBegin; b < bEnd; b++) {
+            const int x0 = b * kBlock;
+            const int nn = ((x0 + kBlock <= bw) ? kBlock : (bw - x0));
+            const int nv = nn & ~3;          // SSE 覆盖的列数（4 的倍数）
+            for (int y = 0; y < bh; y++) {
+                if ((y % kFlush) == 0) {
+                    for (int p = 0; p < 3; p++) {
+                        float* ps = &sum[(size_t)p * kBlock];
+                        for (int i = 0; i < nn; i++) {
+                            const float* col = src[p] + x0 + i;
+                            float s = 0.0f;
+                            for (int k = -r; k <= r; k++)
+                                s += col[(size_t)clampi(y + k, 0, bh - 1) * bw];
+                            ps[i] = s;
+                        }
+                    }
+                } else {
+                    const int add = clampi(y + r, 0, bh - 1);
+                    const int rem = clampi(y - 1 - r, 0, bh - 1);
+                    for (int p = 0; p < 3; p++) {
+                        const float* pa = src[p] + (size_t)add * bw + x0;
+                        const float* pr = src[p] + (size_t)rem * bw + x0;
+                        float* ps = &sum[(size_t)p * kBlock];
+                        int i = 0;
+                        for (; i < nv; i += 4) {
+                            __m128 va = _mm_loadu_ps(pa + i);
+                            __m128 vr = _mm_loadu_ps(pr + i);
+                            __m128 vs = _mm_loadu_ps(ps + i);
+                            vs = _mm_add_ps(vs, _mm_sub_ps(va, vr));
+                            _mm_storeu_ps(ps + i, vs);
+                        }
+                        for (; i < nn; i++) ps[i] += pa[i] - pr[i];
+                    }
+                }
+                for (int p = 0; p < 3; p++) {
+                    const float* ps = &sum[(size_t)p * kBlock];
+                    float* pd = dst[p] + (size_t)y * bw + x0;
+                    int i = 0;
+                    for (; i < nv; i += 4) {
+                        __m128 vs = _mm_loadu_ps(ps + i);
+                        _mm_storeu_ps(pd + i, _mm_mul_ps(vs, vinv));
+                    }
+                    for (; i < nn; i++) pd[i] = ps[i] * inv;
+                }
+            }
+        }
+    });
+}
+
+// 三平面迭代 N 轮盒式。acc 初值必须已是源数据；tmp 为同等大小的中转平面。
+static void boxRgbN3(float* const* acc, float* const* tmp, int n,
+                     int bw, int bh, int r, int passes, int threads) {
+    (void)n;   // 固定 3 通道，n 只用于断言意图
+    for (int i = 0; i < passes; i++) {
+        boxRgbH3((const float* const*)acc, tmp, bw, bh, r, threads);
+        boxRgbV3((const float* const*)tmp, acc, bw, bh, r, threads);
+    }
+}
+
 
 // 三平面双边一轮：dst = bilateral(src)，权重判据带可选参照。
 // ref 为空指针 = 绝对差（用于「只换成浮点、不做参照」的对照）。
@@ -545,6 +750,10 @@ LowFreqBuf boxRgbRoi(const unsigned char* src, int w, int h,
                      const BoxLowParams& p, const RoiRect& roi,
                      int threads, std::vector<float>& scratch) {
     LowFreqBuf out;
+    if (boxTraceEnabled())
+        fprintf(stderr, "[box] enter w=%d h=%d roi=(%d,%d)-(%d,%d) r=%d iters=%d thr=%d\n",
+                w, h, roi.x0, roi.y0, roi.x1, roi.y1,
+                p.radius, p.iters, threads);
     if (!src || w <= 0 || h <= 0 || roi.empty()) return out;
 
     const int r = (p.radius < 1) ? 1 : p.radius;
@@ -568,6 +777,11 @@ LowFreqBuf boxRgbRoi(const unsigned char* src, int w, int h,
     const int bh = by1 - by0;
     if (bw <= 0 || bh <= 0) return out;
 
+    if (boxTraceEnabled())
+        fprintf(stderr, "[box] roi=(%d,%d)-(%d,%d) bw=%d bh=%d r=%d iters=%d fuse=%d thr=%d\n",
+                bx0, by0, bx1, by1, bw, bh, r, iters,
+                boxFuseEnabled() ? 1 : 0, threads);
+
     const size_t np = (size_t)bw * (size_t)bh;
     // 6 个平面：cur(3) / tmp(3)
     if (scratch.size() < np * 6) scratch.resize(np * 6);
@@ -586,10 +800,16 @@ LowFreqBuf boxRgbRoi(const unsigned char* src, int w, int h,
         }
     });
 
-    for (int it = 0; it < iters; it++) {
-        for (int k = 0; k < 3; k++) {
-            boxPlaneH(cur[k], tmp[k], bw, bh, r, threads);
-            boxPlaneV(tmp[k], cur[k], bw, bh, r, threads);
+    // 1.0.13.0：默认走三通道融合 + SSE 垂直趟（逐位等价，见 boxRgbH3 注释）。
+    // BEAUTY_BOX_FUSE=0 退回 1.0.12.0 的「3 通道各跑一遍 boxPlaneH/V」。
+    if (boxFuseEnabled()) {
+        boxRgbN3(cur, tmp, 3, bw, bh, r, iters, threads);
+    } else {
+        for (int it = 0; it < iters; it++) {
+            for (int k = 0; k < 3; k++) {
+                boxPlaneH(cur[k], tmp[k], bw, bh, r, threads);
+                boxPlaneV(tmp[k], cur[k], bw, bh, r, threads);
+            }
         }
     }
 
@@ -1006,8 +1226,11 @@ static inline int bandBoxW(int ww, float frac, int minW) {
 // 为什么需要：每帧要跑 3 组平面 × 3 趟 × 2 方向 = 18 次盒式。如果每次都单独
 // 起线程（默认 8 条），光 std::thread 的创建/回收就吃掉 3~4 ms —— 1080p 上
 // 实测占总耗时 20%。把 3 个通道塞进同一个并行区域，线程数不变、创建次数降到 1/3。
-static void bandBoxH(const float* const* src, float* const* dst, int n,
-                     int bw, int bh, int r, int threads) {
+//
+// 1.0.13.0：这是**回退版**（BEAUTY_BOX_FUSE=0），通道循环在 x 外面。生产默认走
+// 下面的 bandBoxHImpl —— 那个把通道循环搬到 x 里面，累加序列一字不改。
+static void bandBoxHRef(const float* const* src, float* const* dst, int n,
+                        int bw, int bh, int r, int threads) {
     const float inv = 1.0f / (float)(2 * r + 1);
     const int kFlush = 32;    // 同 boxPlaneH：定期重算窗口和，防 float 误差累积
     runRange(0, bh, threads, [&](int yBegin, int yEnd) {
@@ -1031,11 +1254,13 @@ static void bandBoxH(const float* const* src, float* const* dst, int n,
     });
 }
 
-// 多平面同时做垂直盒式。分块策略与 boxPlaneV 相同（32 列一块，行内连续）。
-static void bandBoxV(const float* const* src, float* const* dst, int n,
-                     int bw, int bh, int r, int threads) {
+// 多平面同时做垂直盒式。分块策略与 boxPlaneV 相同（8 列一块，行内连续）。
+// 1.0.8.0：kBlock 32 → 8，理由同 boxPlaneV（并行粒度 = 块数）。
+// 1.0.13.0：这是**回退版**（BEAUTY_BOX_FUSE=0）。生产默认走 bandBoxVImpl（SSE）。
+static void bandBoxVRef(const float* const* src, float* const* dst, int n,
+                        int bw, int bh, int r, int threads) {
     const float inv = 1.0f / (float)(2 * r + 1);
-    const int kBlock = 32;
+    const int kBlock = beautyBoxBlock();
     const int kFlush = 32;
     const int nblk = (bw + kBlock - 1) / kBlock;
     runRange(0, nblk, threads, [&](int bBegin, int bEnd) {
@@ -1075,6 +1300,131 @@ static void bandBoxV(const float* const* src, float* const* dst, int n,
     });
 }
 
+// ── 1.0.13.0：融合版盒式（生产默认）──────────────────────────────────────
+//
+// 这条才是真正在跑的那条。前面 boxRgbRoi（路线 C）只在 lowPath=3 时用，而
+// 3.1.17 起生产默认是 surface3RgbBand（s3Band=1），磨皮段的盒式全部走这里：
+// b1 三平面 + b2 三平面 + amp 单平面，每组 nPass 轮 × H/V 两趟。
+//
+// 两处改动，共同前提仍是**逐位等价**：
+//   · H 趟：把 p 循环从 x 外面搬到里面，N 个累加器共享同一对 (add, rem) 与同一
+//     个重算点。每个平面的 float 累加序列一字不改。x%32 换成倒数计数器。
+//   · V 趟：块内一次算 4 列（SSE2）。add/sub/mul 逐 lane 与标量同序，没有 FMA
+//     形态，所以不会出现「少一次舍入」。尾部不足 4 列走标量。
+// N 只有 1 和 3 两种取值，做成模板让编译器把内层循环完全展开。
+
+template <int N>
+static void bandBoxHImpl(const float* const* src, float* const* dst,
+                         int bw, int bh, int r, int threads) {
+    const float inv = 1.0f / (float)(2 * r + 1);
+    const int kFlush = 32;
+    runRange(0, bh, threads, [&](int yBegin, int yEnd) {
+        for (int y = yBegin; y < yEnd; y++) {
+            const size_t base = (size_t)y * bw;
+            const float* ip[N];
+            float* op[N];
+            for (int p = 0; p < N; p++) {
+                ip[p] = src[p] + base;
+                op[p] = dst[p] + base;
+            }
+            float s[N];
+            for (int p = 0; p < N; p++) s[p] = 0.0f;
+            int since = 0;
+            for (int x = 0; x < bw; x++) {
+                if (since == 0) {
+                    for (int p = 0; p < N; p++) s[p] = 0.0f;
+                    for (int k = -r; k <= r; k++) {
+                        const int i = clampi(x + k, 0, bw - 1);
+                        for (int p = 0; p < N; p++) s[p] += ip[p][i];
+                    }
+                    since = kFlush;
+                }
+                for (int p = 0; p < N; p++) op[p][x] = s[p] * inv;
+                const int add = clampi(x + r + 1, 0, bw - 1);
+                const int rem = clampi(x - r, 0, bw - 1);
+                for (int p = 0; p < N; p++) s[p] += ip[p][add] - ip[p][rem];
+                since--;
+            }
+        }
+    });
+}
+
+template <int N>
+static void bandBoxVImpl(const float* const* src, float* const* dst,
+                         int bw, int bh, int r, int threads) {
+    const float inv = 1.0f / (float)(2 * r + 1);
+    const int kBlock = beautyBoxBlock();
+    const int kFlush = 32;
+    const int nblk = (bw + kBlock - 1) / kBlock;
+    const __m128 vinv = _mm_set1_ps(inv);
+    runRange(0, nblk, threads, [&](int bBegin, int bEnd) {
+        std::vector<float> sum((size_t)kBlock * N);
+        for (int b = bBegin; b < bEnd; b++) {
+            const int x0 = b * kBlock;
+            const int nn = ((x0 + kBlock <= bw) ? kBlock : (bw - x0));
+            const int nv = nn & ~3;
+            for (int y = 0; y < bh; y++) {
+                if ((y % kFlush) == 0) {
+                    // 重算段每 32 行才一次，不值得 SIMD，保持标量（也保持相位）。
+                    for (int p = 0; p < N; p++) {
+                        float* ps = &sum[(size_t)p * kBlock];
+                        for (int i = 0; i < nn; i++) {
+                            const float* col = src[p] + x0 + i;
+                            float s = 0.0f;
+                            for (int k = -r; k <= r; k++)
+                                s += col[(size_t)clampi(y + k, 0, bh - 1) * bw];
+                            ps[i] = s;
+                        }
+                    }
+                } else {
+                    const int add = clampi(y + r, 0, bh - 1);
+                    const int rem = clampi(y - 1 - r, 0, bh - 1);
+                    for (int p = 0; p < N; p++) {
+                        const float* pa = src[p] + (size_t)add * bw + x0;
+                        const float* pr = src[p] + (size_t)rem * bw + x0;
+                        float* ps = &sum[(size_t)p * kBlock];
+                        int i = 0;
+                        for (; i < nv; i += 4) {
+                            __m128 va = _mm_loadu_ps(pa + i);
+                            __m128 vr = _mm_loadu_ps(pr + i);
+                            __m128 vs = _mm_loadu_ps(ps + i);
+                            _mm_storeu_ps(ps + i, _mm_add_ps(vs, _mm_sub_ps(va, vr)));
+                        }
+                        for (; i < nn; i++) ps[i] += pa[i] - pr[i];
+                    }
+                }
+                for (int p = 0; p < N; p++) {
+                    const float* ps = &sum[(size_t)p * kBlock];
+                    float* pd = dst[p] + (size_t)y * bw + x0;
+                    int i = 0;
+                    for (; i < nv; i += 4)
+                        _mm_storeu_ps(pd + i, _mm_mul_ps(_mm_loadu_ps(ps + i), vinv));
+                    for (; i < nn; i++) pd[i] = ps[i] * inv;
+                }
+            }
+        }
+    });
+}
+
+// n 只有 1 / 3 两种（b1、b2 三通道；amp 单平面）。其余值走回退版。
+static void bandBoxH(const float* const* src, float* const* dst, int n,
+                     int bw, int bh, int r, int threads) {
+    if (boxFuseEnabled()) {
+        if (n == 3) { bandBoxHImpl<3>(src, dst, bw, bh, r, threads); return; }
+        if (n == 1) { bandBoxHImpl<1>(src, dst, bw, bh, r, threads); return; }
+    }
+    bandBoxHRef(src, dst, n, bw, bh, r, threads);
+}
+
+static void bandBoxV(const float* const* src, float* const* dst, int n,
+                     int bw, int bh, int r, int threads) {
+    if (boxFuseEnabled()) {
+        if (n == 3) { bandBoxVImpl<3>(src, dst, bw, bh, r, threads); return; }
+        if (n == 1) { bandBoxVImpl<1>(src, dst, bw, bh, r, threads); return; }
+    }
+    bandBoxVRef(src, dst, n, bw, bh, r, threads);
+}
+
 // n 个平面同时迭代 N 次盒式。acc 初值必须已经是源数据。
 static void bandBoxN(float* const* acc, float* const* tmp, int n,
                      int bw, int bh, int r, int passes, int threads) {
@@ -1090,12 +1440,12 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
                      std::vector<float>& scratch) {
     if (!src || !dst || w <= 0 || h <= 0 || roi.empty()) return;
 
-    int ww = w, wh = h;
-    if (p.halfRes) {
-        ww = (w + 1) / 2;
-        wh = (h + 1) / 2;
-        if (ww < 8 || wh < 8) { ww = w; wh = h; }
-    }
+    // ---- 处理分辨率（按**整帧**口径算）----------------------------------
+    // bandBoxW 是按**平面宽度**归一化的：半径必须用整帧平面宽度算。若改用裁剪后
+    // 的宽度，半径会随裁剪框缩小，画面就和整帧路径对不上。
+    const bool half = p.halfRes && (((w + 1) / 2) >= 8) && (((h + 1) / 2) >= 8);
+    const int ww = half ? ((w + 1) / 2) : w;
+    const int wh = half ? ((h + 1) / 2) : h;
 
     const int w1 = bandBoxW(ww, p.f1, 3);
     int       w2 = bandBoxW(ww, p.f2, 5);
@@ -1106,7 +1456,41 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
     const int ra = (wa - 1) / 2;
     const int nPass = (p.passes < 1) ? 1 : ((p.passes > 6) ? 6 : p.passes);
 
-    const size_t np = (size_t)ww * (size_t)wh;
+    // ---- ROI 裁剪（1.0.4.0）---------------------------------------------
+    // 本函数此前只把 roi 拿去判空，整帧照算 —— 生产路径（s3Band=1，3.1.17 起的
+    // 默认）因此拿不到任何 ROI 收益：实测 1080p 上「ROI / 全帧」= 0.98~1.10
+    // （等于没省），而旧路径（s3Band=0）是 0.33~0.53。这里按 roi 外扩后裁剪，
+    // 只算这一块。
+    //
+    // 外扩量必须覆盖三组盒式的累积扩散：B1(r1) + B2(r2) + amp(ra)，各 nPass 趟。
+    // 半分辨率下这些半径按一半计，故再乘 2。+2 是 clamp 边界与双线性取样的余量
+    // （同 boxRgbRoi 的理由）。起点**下对齐到 32 的倍数**（平面坐标），让裁剪版与
+    // 整帧版的重算点落在同一批全局坐标上，浮点累加相位一致 —— 不对齐实测会差
+    // 出 1 个灰阶，真机就是掩码边缘一圈接缝。
+    const int reach = nPass * (r1 + r2 + ra) + 2;
+    const int pad = half ? (reach * 2 + 4) : (reach + 2);
+    int cx0 = roi.x0 - pad, cy0 = roi.y0 - pad;
+    int cx1 = roi.x1 + pad, cy1 = roi.y1 + pad;
+    if (cx0 < 0) cx0 = 0;
+    if (cy0 < 0) cy0 = 0;
+    if (cx1 > w) cx1 = w;
+    if (cy1 > h) cy1 = h;
+    if (half) {
+        cx0 &= ~63; cy0 &= ~63;             // 平面坐标对齐 32 → 全分辨率对齐 64
+    } else {
+        cx0 = alignDown32(cx0);
+        cy0 = alignDown32(cy0);
+    }
+    if (cx1 <= cx0 || cy1 <= cy0) return;
+
+    const int cw = cx1 - cx0;
+    const int ch = cy1 - cy0;
+    const int pww = half ? ((cw + 1) / 2) : cw;   // 裁剪后的平面宽高
+    const int pwh = half ? ((ch + 1) / 2) : ch;
+    const int gpx = half ? (cx0 / 2) : cx0;       // 平面原点（全局平面坐标）
+    const int gpy = half ? (cy0 / 2) : cy0;
+
+    const size_t np = (size_t)pww * (size_t)pwh;
     // 平面：src(3) + b1(3) + b2(3) + amp(1) + tmp(3) = 13，留 16
     if (scratch.size() < np * 16) scratch.resize(np * 16);
     float* sr  = &scratch[0];
@@ -1124,7 +1508,14 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
     float* tm2 = tm1 + np;
 
     // 小画幅（640×394 半分辨率只有 63k 像素）时线程创建比计算还贵，退回单线程。
-    const int bt = (np >= 150000) ? threads : 1;
+    //
+    // 1.0.8.0：阈值从「像素数 ≥ 150000」改成「像素数 ≥ 8192」。
+    // 原来的 150000 卡在**半分辨率 ROI 的临界值上**（正立 1080p 人脸 ROI 加 pad 后
+    // 落在 14.6~18.4 万），人脸稍小一点就整段退回单线程 —— 而盒式一趟是 18 次
+    // 滤波，正是最该并行的部分。跑在持久线程池上，多开几条线程的成本是微秒级，
+    // 真正该防的只有「几十像素的缩略图」这种量级，8192 足够挡住。
+    // 具体几线程由 runRange 内部的 effectiveThreads 按行数再收敛。
+    const int bt = (np >= beautyBoxMinPx()) ? threads : 1;
     float* srcp[3] = {sr, sg, sb};
     float* b1p[3]  = {b1r, b1g, b1b};
     float* b2p[3]  = {b2r, b2g, b2b};
@@ -1133,37 +1524,38 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
     const float inv255 = 1.0f / 255.0f;
 
     // ---- 下采样到处理分辨率（2×2 盒式，与 25 tap 路径同口径【推断】）------
-    if (ww == w && wh == h) {
-        runRange(0, h, threads, [&](int yBegin, int yEnd) {
-            for (int y = yBegin; y < yEnd; y++) {
+    if (!half) {
+        runRange(0, ch, threads, [&](int yBegin, int yEnd) {
+            for (int ly = yBegin; ly < yEnd; ly++) {
+                const int y = cy0 + ly;
                 const unsigned char* row = src + (size_t)y * (size_t)w * 4;
-                const size_t o = (size_t)y * (size_t)w;
-                for (int x = 0; x < w; x++) {
-                    const size_t q = (size_t)x * 4;
-                    sr[o + x] = (float)row[q + 0];
-                    sg[o + x] = (float)row[q + 1];
-                    sb[o + x] = (float)row[q + 2];
+                const size_t o = (size_t)ly * (size_t)pww;
+                for (int lx = 0; lx < pww; lx++) {
+                    const size_t q = (size_t)(cx0 + lx) * 4;
+                    sr[o + lx] = (float)row[q + 0];
+                    sg[o + lx] = (float)row[q + 1];
+                    sb[o + lx] = (float)row[q + 2];
                 }
             }
         });
     } else {
-        runRange(0, wh, threads, [&](int yBegin, int yEnd) {
-            for (int y = yBegin; y < yEnd; y++) {
-                const int y0 = y * 2;
+        runRange(0, pwh, threads, [&](int yBegin, int yEnd) {
+            for (int ly = yBegin; ly < yEnd; ly++) {
+                const int y0 = cy0 + ly * 2;
                 const int y1 = (y0 + 1 < h) ? (y0 + 1) : y0;
-                const unsigned char* r0 = src + (size_t)y0 * (size_t)w * 4;
-                const unsigned char* r1 = src + (size_t)y1 * (size_t)w * 4;
-                const size_t o = (size_t)y * (size_t)ww;
-                for (int x = 0; x < ww; x++) {
-                    const int x0 = x * 2;
+                const unsigned char* pr0 = src + (size_t)y0 * (size_t)w * 4;
+                const unsigned char* pr1 = src + (size_t)y1 * (size_t)w * 4;
+                const size_t o = (size_t)ly * (size_t)pww;
+                for (int lx = 0; lx < pww; lx++) {
+                    const int x0 = cx0 + lx * 2;
                     const int x1 = (x0 + 1 < w) ? (x0 + 1) : x0;
                     const size_t i0 = (size_t)x0 * 4;
                     const size_t i1 = (size_t)x1 * 4;
-                    sr[o + x] = (float)(r0[i0] + r0[i1] + r1[i0] + r1[i1]) * 0.25f;
-                    sg[o + x] = (float)(r0[i0 + 1] + r0[i1 + 1]
-                                      + r1[i0 + 1] + r1[i1 + 1]) * 0.25f;
-                    sb[o + x] = (float)(r0[i0 + 2] + r0[i1 + 2]
-                                      + r1[i0 + 2] + r1[i1 + 2]) * 0.25f;
+                    sr[o + lx] = (float)(pr0[i0] + pr0[i1] + pr1[i0] + pr1[i1]) * 0.25f;
+                    sg[o + lx] = (float)(pr0[i0 + 1] + pr0[i1 + 1]
+                                       + pr1[i0 + 1] + pr1[i1 + 1]) * 0.25f;
+                    sb[o + lx] = (float)(pr0[i0 + 2] + pr0[i1 + 2]
+                                       + pr1[i0 + 2] + pr1[i1 + 2]) * 0.25f;
                 }
             }
         });
@@ -1172,26 +1564,26 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
     // ---- B1 = 窄模糊，B2 = 宽模糊（两个不同尺度，这是 §11.5 的核心）------
     // 先把 src 拷进累加器再迭代（bandBoxN 的 acc 初值必须是 src）。
     for (int k = 0; k < 3; k++) memcpy(b1p[k], srcp[k], np * sizeof(float));
-    bandBoxN(b1p, tmpp, 3, ww, wh, r1, nPass, bt);
+    bandBoxN(b1p, tmpp, 3, pww, pwh, r1, nPass, bt);
 
     for (int k = 0; k < 3; k++) memcpy(b2p[k], srcp[k], np * sizeof(float));
-    bandBoxN(b2p, tmpp, 3, ww, wh, r2, nPass, bt);
+    bandBoxN(b2p, tmpp, 3, pww, pwh, r2, nPass, bt);
 
     // ---- 振幅代理 a = blur(|C.g − B2.g|)，只测绿通道（同 §3.1 ③）---------
     // 为什么用 |C−B2| 而不是 |B2−B1|：后者在高频处两者都≈0，相减也≈0，
     // 测不到高频振幅 —— §12.3 的对照表里 proxy=d 在 P=8 的振幅依赖是 1.0x，
     // 等于门控失效。|C−B2| 在整个频段都随振幅线性增长。
-    runRange(0, wh, threads, [&](int yBegin, int yEnd) {
+    runRange(0, pwh, threads, [&](int yBegin, int yEnd) {
         for (int y = yBegin; y < yEnd; y++) {
-            const size_t o = (size_t)y * (size_t)ww;
-            for (int x = 0; x < ww; x++) {
+            const size_t o = (size_t)y * (size_t)pww;
+            for (int x = 0; x < pww; x++) {
                 float d = sg[o + x] - b2g[o + x];
                 amp[o + x] = (d < 0.0f) ? -d : d;
             }
         }
     });
     float* ampp[1] = {amp};
-    bandBoxN(ampp, tmpp, 1, ww, wh, ra, nPass, bt);
+    bandBoxN(ampp, tmpp, 1, pww, pwh, ra, nPass, bt);
 
     // ---- 合成（与 surface3Rgb25 逐行同口径，多一步 ③ 振幅门控）----------
     const float I = (p.I < 0.0f) ? 0.0f : ((p.I > 1.0f) ? 1.0f : p.I);
@@ -1205,11 +1597,54 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
     const float sxw = (float)ww / (float)w;
     const float syw = (float)wh / (float)h;
 
-    runRange(0, h, threads, [&](int yBegin, int yEnd) {
+    // 裁剪区之外保持逐字节原样：整帧路径靠下面这个循环把 dst 全写一遍，
+    // 裁剪后必须先把剩下的部分拷过去，否则 dst 上是上一帧的残留。
+    //
+    // 1.0.8.0：由单线程循环改成按行并行。1080p 上这一步要搬 6~7 MB（ROI 只占
+    // 16%），单线程 memcpy 约 0.5~0.8 ms，是全流程里唯一还能整段摊到多核的
+    // 搬运活。写区与下面合成段（cy0..cy1 × cx0..cx1）互不重叠，并行安全。
+    if (cw != w || ch != h) {
+        // 1.0.10.0：1.0.8.0 把这遍改成按行并行，真机上却疑似变慢。做成开关，
+        // 好在同一场景下把「并行」与「串行」各跑一遍 —— 台架没有编码器抢核，
+        // 这类差异只有真机能显出来。默认仍走并行（与 1.0.8.0 一致）。
+        if (parCopyEnabled()) {
+            runRange(0, h, threads, [&](int yBegin, int yEnd) {
+                for (int y = yBegin; y < yEnd; y++) {
+                    const size_t row = (size_t)y * (size_t)w;
+                    if (y < cy0 || y >= cy1) {
+                        memcpy(dst + row * 4, src + row * 4, (size_t)w * 4);
+                        continue;
+                    }
+                    if (cx0 > 0)
+                        memcpy(dst + row * 4, src + row * 4, (size_t)cx0 * 4);
+                    if (cx1 < w)
+                        memcpy(dst + (row + (size_t)cx1) * 4,
+                               src + (row + (size_t)cx1) * 4,
+                               (size_t)(w - cx1) * 4);
+                }
+            });
+        } else {
+            for (int y = 0; y < h; y++) {
+                const size_t row = (size_t)y * (size_t)w;
+                if (y < cy0 || y >= cy1) {
+                    memcpy(dst + row * 4, src + row * 4, (size_t)w * 4);
+                    continue;
+                }
+                if (cx0 > 0)
+                    memcpy(dst + row * 4, src + row * 4, (size_t)cx0 * 4);
+                if (cx1 < w)
+                    memcpy(dst + (row + (size_t)cx1) * 4,
+                           src + (row + (size_t)cx1) * 4,
+                           (size_t)(w - cx1) * 4);
+            }
+        }
+    }
+
+    runRange(cy0, cy1, threads, [&](int yBegin, int yEnd) {
         for (int y = yBegin; y < yEnd; y++) {
             const size_t rowOff = (size_t)y * (size_t)w;
-            const float vy = ((float)y + 0.5f) * syw;
-            for (int x = 0; x < w; x++) {
+            const float vy = ((float)y + 0.5f) * syw - (float)gpy;
+            for (int x = cx0; x < cx1; x++) {
                 const size_t o = (rowOff + (size_t)x) * 4;
                 const int m = mask ? (int)mask[rowOff + (size_t)x] : 255;
                 if (m == 0) {
@@ -1219,7 +1654,7 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
                     dst[o + 3] = src[o + 3];
                     continue;
                 }
-                const float vx = ((float)x + 0.5f) * sxw;
+                const float vx = ((float)x + 0.5f) * sxw - (float)gpx;
                 const float skin = (float)m * inv255;
                 const float eye = protect
                     ? ((float)protect[rowOff + (size_t)x] * inv255 * eyeK)
@@ -1229,17 +1664,17 @@ void surface3RgbBand(const unsigned char* src, unsigned char* dst, int w, int h,
 
                 // ③ 振幅门控：弱纹理 w→1（照磨），强纹理 w→0（放过）
                 //    gw = 1 / (1 + (a/T)^gwp)，gwp>2 时陡度更大 → 选择性的来源。
-                float a = planeBilinear(amp, ww, wh, vx, vy) * invT;
+                float a = planeBilinear(amp, pww, pwh, vx, vy) * invT;
                 const float ap = gwpSq ? (a * a)
                                        : ((a > 1e-6f) ? powf(a, gwp) : 0.0f);
                 float gw = 1.0f / (1.0f + ap);
 
-                const float v1[3] = {planeBilinear(b1r, ww, wh, vx, vy),
-                                     planeBilinear(b1g, ww, wh, vx, vy),
-                                     planeBilinear(b1b, ww, wh, vx, vy)};
-                const float v2[3] = {planeBilinear(b2r, ww, wh, vx, vy),
-                                     planeBilinear(b2g, ww, wh, vx, vy),
-                                     planeBilinear(b2b, ww, wh, vx, vy)};
+                const float v1[3] = {planeBilinear(b1r, pww, pwh, vx, vy),
+                                     planeBilinear(b1g, pww, pwh, vx, vy),
+                                     planeBilinear(b1b, pww, pwh, vx, vy)};
+                const float v2[3] = {planeBilinear(b2r, pww, pwh, vx, vy),
+                                     planeBilinear(b2g, pww, pwh, vx, vy),
+                                     planeBilinear(b2b, pww, pwh, vx, vy)};
                 for (int k = 0; k < 3; k++) {
                     const float c = (float)src[o + (size_t)k];
                     float even = c - v1[k] + v2[k];
@@ -1372,8 +1807,17 @@ void detailRefill(const unsigned char* src, unsigned char* dst, int w, int h,
 
     boxPlaneH(lum, tmp, bw, bh, 1, threads);
     boxPlaneV(tmp, b3, bw, bh, 1, threads);
-    boxPlaneH(lum, tmp, bw, bh, 3, threads);
-    boxPlaneV(tmp, b7, bw, bh, 3, threads);
+
+    // 1.0.12.0（A7）：中频带 hm = a3 − a7 **只在 p.mid / p.globalMid 非 0 时被读到**。
+    // 而生产上的基准回填（blurRefill）把 dp.mid 明确设成 0（只还细频、不碰中频），
+    // 全局锐化没开时 dp.globalMid 也是 0 —— 这种情况下 7×7 那两趟就是纯白算：
+    // 盒式滑动窗每像素 3 次加减，两趟等于把整片 ROI 再扫两遍，还多写满一个 b7 平面。
+    // 跳过它是**逐字节等价**的（hm 永远不会被读），所以不需要画质复核。
+    const bool needMid = (p.mid != 0.0f || p.globalMid != 0.0f);
+    if (needMid) {
+        boxPlaneH(lum, tmp, bw, bh, 3, threads);
+        boxPlaneV(tmp, b7, bw, bh, 3, threads);
+    }
 
     // ---- delta 模式：算「dst 现在还剩多少细频」--------------------------------
     // 为什么需要：普通模式加回的是**原图的**细频，磨皮轻的时候会把原图细节
@@ -1433,7 +1877,6 @@ void detailRefill(const unsigned char* src, unsigned char* dst, int w, int h,
                     const float hd = dlum[(size_t)y * bw + x] - db3[(size_t)y * bw + x];
                     hf = hf - hd;
                 }
-                const float hm = a3[x] - a7[x];     // 中频带（3~7px）
                 float d = 0.0f;
                 if (fwF != 0.0f || fwG != 0.0f) {
                     const float kF = softKneeF(softThrF(hf, p.thrFine), p.kneeFine);
@@ -1448,6 +1891,11 @@ void detailRefill(const unsigned char* src, unsigned char* dst, int w, int h,
                     }
                 }
                 if (mwF != 0.0f || mwG != 0.0f) {
+                    // 1.0.12.0（A7）：hm 只在这个分支里被需要，所以挪进来算。
+                    // 上面的 needMid 为 false 时 b7 根本没被填充，绝不能在这个
+                    // 分支之外解引用 a7 —— 那时 p.mid 与 p.globalMid 都是 0，
+                    // mwF/mwG 双双为 0，这个分支进不来。
+                    const float hm = a3[x] - a7[x];     // 中频带（3~7px）
                     const float kM = softKneeF(softThrF(hm, p.thrMid), p.kneeMid);
                     if (mwF != 0.0f) d += mwF * kM;
                     if (mwG != 0.0f) {
@@ -1470,5 +1918,11 @@ void detailRefill(const unsigned char* src, unsigned char* dst, int w, int h,
         }
     });
 }
+
+// 1.0.9.0：把匿名命名空间里的两个可调项暴露出来，只为在 init 日志里打印。
+int boxBlockWidth() { return beautyBoxBlock(); }
+int boxMinPixels() { return beautyBoxMinPx(); }
+int parCopyOn() { return parCopyEnabled() ? 1 : 0; }
+int boxFuseOn() { return boxFuseEnabled() ? 1 : 0; }
 
 }  // namespace beautycore

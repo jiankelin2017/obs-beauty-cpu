@@ -2,15 +2,21 @@
 
 | 字段 | 值 |
 |---|---|
-| 版本 | `1.0.0.2` |
-| 最后更新 | 2026-11-06 |
-| 适用代码版本 | CPU 线 `1.0.0.2`（提交 `5323856`） |
-| 维护人 | 待人工确认 |
+| 版本 | `1.0.13.12` |
+| 最后更新 | 2026-11-09 |
+| 适用代码版本 | CPU 线 `1.0.13.12` |
+| 维护人 | Jian |
 | 状态 | `Active` |
-| 替代文档 | 原 `04_文档/顶层菜单插件说明.md`（本文为其当前版）；`docs/archive/ui-html-websocket-proposal-20261106.md` 是**未采用的另一套方案**，不得混用 |
+| 替代文档 | 原 `04_文档/顶层菜单插件说明.md`（本文为其当前版）；`docs/archive/ui-html-websocket-proposal-20261106.md`（`Deprecated`） 是**未采用的另一套方案**，不得混用 |
+
+> **归档重建声明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件已按 `MANIFEST.tsv` 逐字恢复，
+> MD5 与字节数 38/38 一致；文首均标「ARCHIVED · 已废弃，见 xxx」，状态 `Deprecated`、**不得据此施工**。
+> 文中以 `docs/archive/` 开头的路径现在指向真实存在的归档件，读者可据此溯源，但不得当作现状引用。
+> 有效结论（含正向与负向／证伪结论）只在唯一 Active 文档留存一份，去向总表见
+> `docs/reference/reference-conclusions.md`；`docs/INDEX.md` §2 登记 38 行归档件。
 
 > 本文只描述 `obs-beauty-ui.dll` 的当前实现。凡标「历史轴实测」或「待人工确认」的数字/状态，
-> 均不是 CPU `1.0.0.2` 的已验证结论，不得据此施工。
+> 均不是 CPU `1.0.13.12` 的已验证结论，不得据此施工。
 
 ---
 
@@ -25,17 +31,18 @@
 | 项 | CPU 版（宏 `=1`，当前构建） | 默认（宏 `=0`，共用源码路径） |
 |---|---|---|
 | 顶层菜单标题 | `美颜·CPU(&A)` | `美颜(&A)` |
-| 窗口标题 | `OBS美颜 · CPU 版 v1.0.0.2` | `OBS美颜参数面板` |
+| 窗口标题 | `OBS美颜 · CPU 版 v1.0.13.12` | `OBS美颜参数面板` |
 | 顶栏徽章 | 蓝色 `CPU 版` QLabel（`objectName=beautyCpuTag`） | 无 |
-| 版本角标 | `CPU v1.0.0.2` | `v1.0.0.2` |
-| 「关于」说明 | 追加「纯 CPU 实现，不依赖 GPU / D3D」+「版本轴 `1.0.0.2` 与 GPU 版 `3.0.1` 独立、不可互比」 | 无该段 |
+| 版本角标 | `CPU v1.0.13.12` | `v1.0.13.12` |
+| 「关于」说明 | 追加「纯 CPU 实现，不依赖 GPU / D3D」+「版本轴 `1.0.13.12` 与 GPU 版 `3.0.1` 独立、不可互比」 | 无该段 |
 | 模块加载日志 | `[obs-beauty-ui][CPU] 模块已加载 v…` | `[obs-beauty-ui] 模块已加载 v…` |
 
 - 宏**默认 `0`**（源码 `#ifndef BEAUTY_UI_CPU_EDITION / #define … 0`）。**唯一**打开它的位置是 `02_构建/build-ui_320.bat` 中 `cl` 命令的 `/DBEAUTY_UI_CPU_EDITION=1`。
   GPU 版依赖本仓库编出的独立 UI DLL，因此共用源码路径必须保持零 CPU 标识——这是硬约束，不是可选优化。
-- `BEAUTY_UI_VERSION "1.0.0.2"` 与 `01_源码/beauty_params.h` 的 `BEAUTY_BUILD_STR` 同属 CPU 四段轴；
+- `BEAUTY_UI_VERSION` 已改为 `BEAUTY_BUILD_STR` 的别名（`01_源码/obs-beauty-ui.cpp:197`，2026-11-07 起不再硬编码），
+  版本号的唯一出处是 `01_源码/beauty_params.h`；
   `BEAUTY_FILTER_ID "obs_beauty_filter"` **永不随版本改动**（改了老场景里的滤镜会变成「缺失滤镜」）。
-- 版本角标取的是**滤镜实机版本**：面板调 `beauty_version` proc 拿裸版本串（如 `1.0.0.2`），
+- 版本角标取的是**滤镜实机版本**：面板调 `beauty_version` proc 拿裸版本串（如 `1.0.13.12`），
   再按宏补前缀 `CPU v` / `v`。`BEAUTY_UI_VERSION` 只用于两处兜底：老滤镜没有该 proc 时的缺省值、
   以及滤镜号与面板号不一致时追加括注（这是「安装时漏换某一边」的现场证据）。比较一律用**不带前缀的裸号**。
 
@@ -58,7 +65,7 @@
 
 ---
 
-## 3. 安装（路径规则有效；当前装机状态待人工确认）
+## 3. 安装（路径规则有效；`1.0.13.11` / `1.0.13.12` 装/卸均 40/40 PASS）
 
 > ⚠️ **目录名必须与 DLL 文件名完全一致。** OBS 扫描 ProgramData 插件时按
 > `<插件目录名>/bin/64bit/<插件目录名>.dll` 找文件（见 `obs-module.c` 的 `parse_binary_from_directory()`）。
@@ -72,9 +79,17 @@ C:\ProgramData\obs-studio\plugins\obs-beauty-ui\bin\64bit\obs-beauty-ui.dll
 C:\ProgramData\obs-studio\plugins\obs-beauty-ui\data\locale\en-US.ini
 ```
 
-> ⚠️ **待人工确认**：CPU `1.0.0.2` 目前**没有对应的装机脚本**（`03_装机\` 下只有历史轴版本），
-> 真机装/卸与 `06_安装包\e2e_test.ps1` 回归也尚未在 CPU `1.0.0.2` 上复跑，见 `README.md` §2.3、§8。
-> 上述路径只证明「历史轴这样装成功过」，**不代表当前已安装或已验证**。
+> ✅ **已验（2026-11-09）**：`1.0.13.12` 的装/卸回归 **40 PASS / 0 FAIL**（22:57，
+> Phase A 25/25 + Phase B 15/15），`PHASE R` 复验 `[bak after R2] 0 file(s)`、R3 四件全 `gone`，
+> 证据 `05_验证/e2e_install_20261109_1312.md`；**画面逐字节对比与机器恢复仍未执行**。
+> `1.0.13.11` 的装/卸回归 **40 PASS / 0 FAIL**（19:16），
+> 证据 `05_验证/e2e_install_20261109_1311.md`；同版 `PHASE R` 还验了「升级后卸载删干净」。
+> `1.0.13.10`（19:02，40/0，含 `PHASE R` 取证）、`1.0.13.9`（40/0）、`1.0.13.8`（40/0）
+> 亦各有 40 项记录，见 `05_验证/e2e_install_20261109_1310.md`、
+> `e2e_install_20261109_139.md`、`e2e_install_20261109.md`。
+> 当前装机脚本是 `03_装机\install_1.0.13.12.bat`。
+> 断言覆盖「装得上 / 卸得干净 / 终态四件还原」，**不覆盖画面观感**；观感结论见 `docs/CHANGELOG.md`
+> 的 `1.0.13.8` / `1.0.13.9` 两节。
 
 ---
 
@@ -93,21 +108,20 @@ C:\ProgramData\obs-studio\plugins\obs-beauty-ui\data\locale\en-US.ini
 ## 5. 构建（可执行）
 
 ```bat
-:: CPU 1.0.0.2：先设独立产物目录，避免覆盖 build_output\ 里的 3.1.40 定稿 DLL
-set BEAUTY_OUTDIR=D:\插件\OBS美颜源码\02_构建\build_1.0.0.2
-02_构建\build-ui_320.bat
+:: CPU 1.0.13.12：一次编出两件 DLL（滤镜 + UI），输出到独立目录，不覆盖旧产物
+02_构建\build_1.0.13.12.bat
 ```
 
 ```powershell
 # 构建后自检：导入符号 ABI 校验
-python 02_构建\verify-ui-imports.py 02_构建\build_1.0.0.2\obs-beauty-ui.dll
+python 02_构建\verify-ui-imports.py 02_构建\build_1.0.13.12\obs-beauty-ui.dll
 ```
 
 | 要点 | 说明 |
 |---|---|
-| CPU 宏 | `build-ui_320.bat` 的 `cl` 命令已含 `/DBEAUTY_UI_CPU_EDITION=1`；**不带宏的编译须去掉该项**（GPU 共用源码路径） |
-| 版本号 | **不在脚本里**，唯一出处是 `01_源码/obs-beauty-ui.cpp` 的 `BEAUTY_UI_VERSION`；脚本版本无关 |
-| 输出 | `%BEAUTY_OUTDIR%\obs-beauty-ui.dll`；未设 `BEAUTY_OUTDIR` 时默认 `02_构建\build_output\`，**不要用于 CPU `1.0.0.2`** |
+| CPU 宏 | `build_1.0.13.12.bat` 的 `cl` 命令含 `/DBEAUTY_UI_CPU_EDITION=1`；**不带宏的编译须去掉该项**（GPU 共用源码路径） |
+| 版本号 | **不在脚本里**，唯一出处是 `01_源码/beauty_params.h` 的 `BEAUTY_BUILD_STR`；`BEAUTY_UI_VERSION` 是它的别名 |
+| 输出 | `02_构建\build_1.0.13.12\obs-beauty-ui.dll`；早期单编脚本 `build-ui_320.bat` 走 `BEAUTY_OUTDIR`，未设时落 `02_构建\build_output\` |
 | 目录探测 | 按**内容**定位目录（源码看 `obs-beauty-ui.cpp`、SDK 看 `obs-studio-32.1.1\libobs`），目录改编号不会失效 |
 | 脚本编码 | 纯 ASCII —— 源码树在中文路径下，UTF-8 的 `.bat` 被 `cmd.exe` 按 GBK 读会路径乱码（`C1083`） |
 
@@ -132,7 +146,7 @@ python 02_构建\verify-ui-imports.py 02_构建\build_1.0.0.2\obs-beauty-ui.dll
 | 文件 | 作用 |
 |---|---|
 | `01_源码/obs-beauty-ui.cpp` | 插件源码：菜单 + 通用属性面板 + CPU 版标识 |
-| `02_构建/build-ui_320.bat` | CPU 版编译脚本（含 `/DBEAUTY_UI_CPU_EDITION=1`） |
+| `02_构建/build_1.0.13.12.bat` | CPU 版编译脚本（一次编两件 DLL，含 `/DBEAUTY_UI_CPU_EDITION=1`）；早期单编 UI 用 `build-ui_320.bat` |
 | `02_构建/verify-ui-imports.py` | 导入符号 ABI 校验 |
 | `参考文件/03_依赖与SDK_OBS/obs-sdk/obs.lib`、`obs-frontend-api.lib`、`obs-frontend-api.def` | 导入库与导出定义（**仅本机，不入库**） |
 
@@ -155,7 +169,7 @@ python 02_构建\verify-ui-imports.py 02_构建\build_1.0.0.2\obs-beauty-ui.dll
 | 真实加载 | 独立进程 `LoadLibrary` 冒烟测试通过（基址 `0x7ff9759d0000`） |
 | 编译 | `build-ui.bat` 通过，产物 `build\obs-beauty-ui.dll`（191,488 字节） |
 
-> 产物路径与体积属旧目录结构；立轴时产物为 `02_构建\build_1.0.0.0\obs-beauty-ui.dll`（当前为 `02_构建\build_1.0.0.2\`）。
+> 产物路径与体积属旧目录结构；立轴时产物为 `02_构建\build_1.0.0.0\obs-beauty-ui.dll`（当前为 `02_构建\build_1.0.13.12\`）。
 > 2026-11-06 的 CPU `1.0.0.0` 编译验证见 `README.md` §2.2（两种宏配置均通过、宏相关字符串只出现在 `=1` 版）。
 
 ---
@@ -168,7 +182,7 @@ python 02_构建\verify-ui-imports.py 02_构建\build_1.0.0.2\obs-beauty-ui.dll
   校验脚本 → `02_构建/verify-ui-imports.py`；产物路径 `build\` → `02_构建\build_1.0.0.0\`。
 - **删除**「底层 SDK 的全局状态问题仍属滤镜端」：当前是纯 CPU 自研 CoreEngine，运行时不加载第三方美颜 SDK，
   该限制的前提已不成立。
-- **未采用的另一套方案**：`docs/archive/ui-html-websocket-proposal-20261106.md`（纯 HTML 面板 + obs-websocket +
+- **未采用的另一套方案**：`docs/archive/ui-html-websocket-proposal-20261106.md`（`Deprecated`）（纯 HTML 面板 + obs-websocket +
   自定义浏览器停靠窗口）与本文不是同一实现，其引用的脚本与路径全部不存在，不得混用。
 - 历史实测数据统一移入附录 A；装机状态、维护人、验证数字均标「待人工确认」。
 

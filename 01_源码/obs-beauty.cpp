@@ -32,11 +32,16 @@
 #include <util/platform.h>
 #include <util/bmem.h>
 
+#include "beauty_env.h"   // beauty_env()：BEAUTY_* 覆盖的唯一入口（1.0.13.10 C-2/C-3）
 #include "beauty_params.h"   // BeautySettings / P_*（纯数据，不引入任何引擎实现）
 #include "beauty_log.h"
 // 引擎抽象层：本文件只认 IBeautyEngine，不直接依赖任何具体实现。
 // 3.1.7 起只有自研 CoreEngine 一条生产路径（旧链路只在离线基准 DLL 里保留）。
 #include "beauty_core.h"
+// 1.0.9.0：只为在 init 行打印盒式的两个可调项（boxBlockWidth / boxMinPixels）。
+#include "beauty_smooth.h"
+// 1.0.11.0：只为在 init 行打印色调走的是整数表还是浮点插值（toneIntLutOn）。
+#include "beauty_freq.h"
 
 #define PLUGIN_NAME "obs-beauty"
 #define PLUGIN_VERSION BEAUTY_BUILD_STR
@@ -175,6 +180,14 @@ struct beauty_filter {
 	// noface=N 表示「本窗口内有 N 帧因为确认没人而整段跳过」。没有它的话，
 	// 引擎耗时归零既可能是跳过生效，也可能是磨皮压根没跑 —— 无法归因。
 	uint64_t prof_noface0;
+	// 1.0.9.0：引擎分段耗时累计（见 beauty_core.h 的 lastStageMs）。
+	// 真机上「引擎 14 ms」到底花在检测、磨皮还是色调，只有分段能回答 ——
+	// 整段一个数字时，任何优化都只能靠猜。
+	double prof_st[6];
+	// 1.0.13.12 D1：下面这组字段由参数线程（beauty_filter_update）写、
+	// 渲染线程（beauty_filter_render）读。bzalloc/bfree 不调 C++ 构造析构，
+	// 所以用 POD 的 SRWLOCK（全零初始化等价于 SRWLOCK_INIT），不能放 std::mutex。
+	SRWLOCK param_lock;
 	bool enabled;
 	bool mirror;
 	int blur_type;    // 1=双边(最强) 0=高斯 2=弱磨皮
@@ -188,14 +201,29 @@ struct beauty_filter {
 	bool err_reported;     // 引擎报错只提示一次，避免每帧刷屏
 };
 
+// 1.0.13.12 D1：参数线程与渲染线程共享字段的 POD 快照。
+// render 每帧在 param_lock 下取一次快照，之后整帧只读这份局部副本。
+struct beauty_param_snapshot {
+	bool enabled;
+	bool mirror;
+	int blur_type;
+	int skin_detect;
+	int smooth_mode;
+	int landmark_q;
+	int max_faces;
+	int slot;
+	bool dirty;
+	double v[BEAUTY_NPARAM];
+};
+
 // 面板值 → 引擎设置。每帧构一次，代价是 9 个 double 拷贝。
-static void beauty_filter_settings(struct beauty_filter *f, BeautySettings &s)
+static void beauty_filter_settings(const struct beauty_param_snapshot *p, BeautySettings &s)
 {
 	for (int i = 0; i < BEAUTY_NPARAM; i++)
-		s.panel[i] = f->v[i];
-	s.blur_type = f->blur_type;
-	s.skin_detect = f->skin_detect ? 1 : 0;
-	s.smooth_mode = f->smooth_mode;
+		s.panel[i] = p->v[i];
+	s.blur_type = p->blur_type;
+	s.skin_detect = p->skin_detect ? 1 : 0;
+	s.smooth_mode = p->smooth_mode;
 }
 
 static void beauty_filter_read(struct beauty_filter *f, obs_data_t *s)
@@ -250,6 +278,25 @@ static double beauty_now_ms(void)
 	return (double)c.QuadPart * 1000.0 / freq;
 }
 
+// ---- 1.0.11.0（A5）：下载零拷贝，默认关闭 --------------------------------
+//
+// 打开后，`gs_stagesurface_map` 出来的指针直接当引擎的输入，省掉一次 8.3 MB
+// 的整帧 memcpy。**默认关**，因为有一个真实风险需要实测：staging surface 映射
+// 出来的内存往往是写合并/非缓存的，引擎会在不同 pass 里把同一片输入读好几遍
+// （掩码、磨皮、色调、细节都读 src）。从缓存里读 8 MB 和从非缓存内存里读 8 MB
+// 差一个数量级 —— 省下的 0.6 ms memcpy 可能被加倍的读取开销吃掉。
+//
+// 所以先让它可开关、可观测（init 日志里有 zc=），在同一次装机里用
+// BEAUTY_ZERO_COPY=1 实测；赢了再改默认值。
+static bool beauty_zero_copy(void)
+{
+	static const bool v = []() {
+		const char *e = beauty_env("BEAUTY_ZERO_COPY");
+		return e && e[0] == '1';
+	}();
+	return v;
+}
+
 // ---- 3.1.11：把滤镜版本号暴露给其它模块（面板左下角显示用）------------------
 //
 // 为什么：面板角标打的是**面板自己的版本**（3.0.22），用户看到它就会问
@@ -267,6 +314,11 @@ static void beauty_version_proc(void *, calldata_t *params)
 static void *beauty_filter_create(obs_data_t *settings, obs_source_t *source)
 {
 	struct beauty_filter *f = (struct beauty_filter *)bzalloc(sizeof(struct beauty_filter));
+	/* 2026-11-10 代码审查 #2：bzalloc 可能返回 NULL，D1 把首个解引用点
+	 * 提前到 InitializeSRWLock，必须先判空再写成员。 */
+	if (!f)
+		return NULL;
+	InitializeSRWLock(&f->param_lock);
 	f->context = source;
 	f->frame_id = 0;
 	{
@@ -280,7 +332,7 @@ static void *beauty_filter_create(obs_data_t *settings, obs_source_t *source)
 	f->err_reported = false;
 	// 只在显式开启时统计，避免给生产会话平白加两次计时调用
 	{
-		const char *p = getenv("BEAUTY_PROFILE");
+		const char *p = beauty_env("BEAUTY_PROFILE");
 		f->prof_on = (p && p[0] == '1');
 	}
 	beauty_migrate(settings);
@@ -470,10 +522,35 @@ static void beauty_filter_update(void *data, obs_data_t *settings)
 {
 	struct beauty_filter *f = (struct beauty_filter *)data;
 	beauty_migrate(settings);
+	// 1.0.13.12 D1：与渲染线程的快照互斥，整组字段一次写完再置脏。
+	AcquireSRWLockExclusive(&f->param_lock);
 	beauty_filter_read(f, settings);
 	// 只置脏；进程级检测选项（旋转/识别模式/人数）推迟到渲染线程下发。
 	// 九个效果滑块不需要脏标记 —— 引擎每槽位做参数指纹比对，不变就不下发。
 	f->dirty = true;
+	ReleaseSRWLockExclusive(&f->param_lock);
+}
+
+// 取共享字段快照，并在同一临界区内消费 dirty。
+// 用独占而非共享锁，是因为「读 dirty 并清零」必须是原子的；
+// 十来个标量拷贝的粒度很小，无争用时开销可忽略。
+static void beauty_filter_snapshot(struct beauty_filter *f,
+				   struct beauty_param_snapshot *p)
+{
+	AcquireSRWLockExclusive(&f->param_lock);
+	p->enabled = f->enabled;
+	p->mirror = f->mirror;
+	p->blur_type = f->blur_type;
+	p->skin_detect = f->skin_detect;
+	p->smooth_mode = f->smooth_mode;
+	p->landmark_q = f->landmark_q;
+	p->max_faces = f->max_faces;
+	p->slot = f->slot;
+	for (int i = 0; i < BEAUTY_NPARAM; i++)
+		p->v[i] = f->v[i];
+	p->dirty = f->dirty;
+	f->dirty = false;
+	ReleaseSRWLockExclusive(&f->param_lock);
 }
 
 // ------------------------------------------------------------------
@@ -531,20 +608,101 @@ static void frame_mirror(uint8_t *buf, uint32_t cx, uint32_t cy)
 	}
 }
 
+/* 1.0.13.10（C-1）：整块资源的「全成或全不成」重分配。
+ *
+ * 旧写法先把 f->w / f->h 提交成新尺寸，再去 malloc / create，各自判空。
+ * 于是任何一次「部分失败」都会留下一个**再也不会被修复**的状态：
+ *   malloc 返回 NULL -> f->buf_in 是 NULL，但 f->w/h 已经是新值、f->tr 也建
+ *   好了；下一帧的判据 `f->w != cx || f->h != cy || !f->tr` 三个条件全不成立，
+ *   重分配被永久跳过，控制流直接走到 memcpy(f->buf_in, ...) 和
+ *   gs_stage_texture(f->stage, ...) —— 对 NULL 解引用。
+ *   （stagesurface 建失败、texrender 建成功，是同一个结局。）
+ * 也不能「失败后继续用上一份缓冲」：cx/cy 已经是新尺寸，拿旧缓冲按新尺寸
+ * 读写就会越界。
+ *
+ * 所以改成先建新的、全成才换：新资源全部落在局部变量里，任一失败就把已经
+ * 建好的局部资源释放掉并返回 false，f 一个字段都不动 —— 上一帧那套仍然完整
+ * 可用。调用方本帧直通，下一帧 `f->w != cx` 仍然成立，自然重试。
+ */
+static bool beauty_filter_alloc(struct beauty_filter *f, uint32_t cx, uint32_t cy)
+{
+	const size_t bytes = (size_t)cx * (size_t)cy * 4;
+	uint8_t *buf_in = (uint8_t *)malloc(bytes);
+	uint8_t *buf_out = (uint8_t *)malloc(bytes);
+	gs_texrender_t *tr = NULL;
+	gs_stagesurf_t *stage = NULL;
+	gs_texture_t *out_tex = NULL;
+
+	/* CPU 缓冲都拿不到就不必去建 GPU 资源：建了也用不上，只是白占一份显存。 */
+	if (buf_in && buf_out) {
+		tr = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+		stage = gs_stagesurface_create(cx, cy, GS_RGBA);
+		/* GS_DYNAMIC is MANDATORY here.
+		 * gs_texture_set_image() is implemented on top of
+		 * gs_texture_map(); the D3D11 backend maps via
+		 * ID3D11DeviceContext::Map(), which only succeeds for
+		 * D3D11_USAGE_DYNAMIC textures (created with GS_DYNAMIC).
+		 * A plain DEFAULT texture makes Map() fail *silently*
+		 * (no blog output), so gs_texture_set_image() becomes a
+		 * no-op and the output texture keeps its uninitialised
+		 * contents -> completely black video. */
+		out_tex = gs_texture_create(cx, cy, GS_RGBA, 1, NULL, GS_DYNAMIC);
+	}
+
+	if (!buf_in || !buf_out || !tr || !stage || !out_tex) {
+		blog(LOG_ERROR,
+		     "[" PLUGIN_NAME "] alloc %ux%u failed (mem=%d/%d tr=%d stage=%d tex=%d); "
+		     "frame skipped, retry next frame",
+		     cx, cy, (int)(buf_in != NULL), (int)(buf_out != NULL),
+		     (int)(tr != NULL), (int)(stage != NULL), (int)(out_tex != NULL));
+		free(buf_in);
+		free(buf_out);
+		if (stage)
+			gs_stagesurface_destroy(stage);
+		if (tr)
+			gs_texrender_destroy(tr);
+		if (out_tex)
+			gs_texture_destroy(out_tex);
+		return false;
+	}
+
+	/* 新的一套已经齐了，这时才动旧的 —— 顺序反过来就是上面那个 bug 的变体。 */
+	free(f->buf_in);
+	free(f->buf_out);
+	if (f->stage)
+		gs_stagesurface_destroy(f->stage);
+	if (f->tr)
+		gs_texrender_destroy(f->tr);
+	if (f->out_tex)
+		gs_texture_destroy(f->out_tex);
+
+	f->buf_in = buf_in;
+	f->buf_out = buf_out;
+	f->tr = tr;
+	f->stage = stage;
+	f->out_tex = out_tex;
+	f->w = cx;
+	f->h = cy;
+	f->verified = false;
+	return true;
+}
+
 static void beauty_filter_render(void *data, gs_effect_t *effect)
 {
 	struct beauty_filter *f = (struct beauty_filter *)data;
 	obs_source_t *target = obs_filter_get_target(f->context);
 	static int dbg = 0;
 
+	// 1.0.13.12 D1：整帧只用这一份快照，不再触碰参数线程写的共享字段。
+	struct beauty_param_snapshot snap;
+	beauty_filter_snapshot(f, &snap);
+
 	// 进程级检测选项（识别模式 / 人物个数）。这两个 setter 在引擎里
 	// 是进程全局的，只能从渲染线程调；UI 线程只置脏。
-	if (f->dirty) {
-		f->dirty = false;
-		beautyEngine().setDetectOptions(0, f->landmark_q, f->max_faces);
-	}
+	if (snap.dirty)
+		beautyEngine().setDetectOptions(0, snap.landmark_q, snap.max_faces);
 
-	if (!f->enabled || f->slot < 0 || !target) {
+	if (!snap.enabled || snap.slot < 0 || !target) {
 		obs_source_skip_video_filter(f->context);
 		return;
 	}
@@ -558,47 +716,19 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 
 	if (dbg < 3) {
 		blog(LOG_INFO, "[" PLUGIN_NAME "] render#%d target=%s %ux%u (v%s, slot=%d)", dbg,
-		     obs_source_get_name(target), cx, cy, PLUGIN_VERSION, f->slot);
+		     obs_source_get_name(target), cx, cy, PLUGIN_VERSION, snap.slot);
 		dbg++;
 	}
 
-	// (re)allocate on size change
-	if (f->w != cx || f->h != cy || !f->tr) {
-		f->w = cx;
-		f->h = cy;
-		free(f->buf_in);
-		free(f->buf_out);
-		f->buf_in = (uint8_t *)malloc((size_t)cx * cy * 4);
-		f->buf_out = (uint8_t *)malloc((size_t)cx * cy * 4);
-		if (f->stage) {
-			gs_stagesurface_destroy(f->stage);
-			f->stage = NULL;
-		}
-		if (f->tr)
-			gs_texrender_destroy(f->tr);
-		f->tr = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-		f->stage = gs_stagesurface_create(cx, cy, GS_RGBA);
-		if (f->out_tex) {
-			gs_texture_destroy(f->out_tex);
-			f->out_tex = NULL;
-		}
-		if (!f->tr || !f->stage || !f->buf_in || !f->buf_out) {
-			blog(LOG_ERROR, "[" PLUGIN_NAME "] alloc failed %ux%u", cx, cy);
+	// (re)allocate on size change.
+	//
+	// 判据里必须带上**所有**资源指针，不能只看 tr：任何一项为 NULL 都说明上次
+	// 分配只成功了一半，必须重试。为什么（C-1，1.0.13.10）见 beauty_filter_alloc()。
+	if (f->w != cx || f->h != cy || !f->tr || !f->stage || !f->out_tex ||
+	    !f->buf_in || !f->buf_out) {
+		if (!beauty_filter_alloc(f, cx, cy)) {
 			obs_source_skip_video_filter(f->context);
 			return;
-		}
-		f->verified = false;
-		if (!f->out_tex) {
-			/* GS_DYNAMIC is MANDATORY here.
-			 * gs_texture_set_image() is implemented on top of
-			 * gs_texture_map(); the D3D11 backend maps via
-			 * ID3D11DeviceContext::Map(), which only succeeds for
-			 * D3D11_USAGE_DYNAMIC textures (created with GS_DYNAMIC).
-			 * A plain DEFAULT texture makes Map() fail *silently*
-			 * (no blog output), so gs_texture_set_image() becomes a
-			 * no-op and the output texture keeps its uninitialised
-			 * contents -> completely black video. */
-			f->out_tex = gs_texture_create(cx, cy, GS_RGBA, 1, NULL, GS_DYNAMIC);
 		}
 	}
 
@@ -645,19 +775,28 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 
 	// 2) download to CPU
 	bool got = false;
+	bool mapped_held = false;   // 1.0.11.0：零拷贝时 map 要一直持有到引擎读完
+	const uint8_t *in_p = f->buf_in;
 	const double t_dl = f->prof_on ? beauty_now_ms() : 0.0;
 	gs_stage_texture(f->stage, in_tex);
 	uint8_t *ptr = NULL;
 	uint32_t linesize = 0;
 	if (gs_stagesurface_map(f->stage, &ptr, &linesize) && ptr) {
 		const size_t row = (size_t)cx * 4;
-		if (linesize == row) {
+		if (linesize == row && beauty_zero_copy()) {
+			/* A5：行内无 padding，直接把映射指针当输入，省掉整帧 memcpy。
+			 * 代价是 map 必须持有到引擎读完（否则指针失效），所以这里不 unmap，
+			 * 由下面第 4 步之前的收尾段负责。 */
+			in_p = ptr;
+			mapped_held = true;
+		} else if (linesize == row) {
 			memcpy(f->buf_in, ptr, row * cy);
+			gs_stagesurface_unmap(f->stage);
 		} else {
 			for (uint32_t y = 0; y < cy; y++)
 				memcpy(f->buf_in + (size_t)y * row, ptr + (size_t)y * linesize, row);
+			gs_stagesurface_unmap(f->stage);
 		}
-		gs_stagesurface_unmap(f->stage);
 		got = true;
 	}
 
@@ -676,13 +815,13 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 	// 全 0 参数时引擎输出与输入逐字节一致，直接透传，省掉一整个 CPU 往返
 	// （含一次 BGRA 双换和一次 render 调用）。
 	BeautySettings s;
-	beauty_filter_settings(f, s);
+	beauty_filter_settings(&snap, s);
 	const bool skip_sdk = s.allZero();
 	const double t_proc = f->prof_on ? beauty_now_ms() : 0.0;
 
 	if (!skip_sdk) {
-		const bool ok = beautyEngine().process(f->slot, f->buf_in, f->buf_out,
-							   (int)cx, (int)cy, s);
+		const bool ok = beautyEngine().process(snap.slot, in_p, f->buf_out,
+						       (int)cx, (int)cy, s);
 		if (!ok) {
 			// 每实例只报一次：恢复后清零，下次故障还会再报。
 			if (!f->err_reported) {
@@ -690,6 +829,10 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 				blog(LOG_ERROR, "[" PLUGIN_NAME "] 引擎处理失败：%s（本实例直通）",
 				     beautyEngine().lastErr());
 			}
+			// 零拷贝路径持有着 map，这条提前返回必须先放开，否则 stage
+			// surface 会一直锁着，下一帧 gs_stage_texture 会失败。
+			if (mapped_held)
+				gs_stagesurface_unmap(f->stage);
 			obs_source_skip_video_filter(f->context);
 			return;
 		}
@@ -701,34 +844,61 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 		if (beautyCoreSkinAnnounce())
 			blog(LOG_INFO, "[" PLUGIN_NAME "] %s", beautyCoreSkinInfo());
 	} else {
-		memcpy(f->buf_out, f->buf_in, (size_t)cx * cy * 4);
+		memcpy(f->buf_out, in_p, (size_t)cx * cy * 4);
+		/* 1.0.8.0：A 通道置位已搬进引擎（beauty_core.cpp 的 forceOpaque），
+		 * 但「面板全 0」这条分支不调引擎，所以这里保留一份。这条路只在整块
+		 * 面板为 0 时走到，一帧 0.4 ms 不在预算讨论范围内。 */
+		uint32_t *pz = (uint32_t *)(void *)f->buf_out;
+		const size_t pxn = (size_t)cx * cy;
+		for (size_t k = 0; k < pxn; k++)
+			pz[k] |= 0xFF000000u;
 	}
 	if (f->prof_on)
 		f->prof_proc += beauty_now_ms() - t_proc;
+	// 1.0.9.0：引擎分段耗时。skip_sdk 的帧没进引擎，分段值没有意义，不计。
+	if (f->prof_on && !skip_sdk) {
+		double st[6] = {0, 0, 0, 0, 0, 0};
+		beautyEngine().lastStageMs(st);
+		for (int i = 0; i < 6; i++)
+			f->prof_st[i] += st[i];
+	}
 
 	// 4) upload the processed frame into our (dynamic) texture
 	const double t_up = f->prof_on ? beauty_now_ms() : 0.0;
-	// the engine may leave alpha at 0 in areas it did not touch; force opaque
-	//
-	// 3.1.21：改成按 32 位整像素写。原来是每隔 4 字节写一次的单字节循环，
-	// 1080p 是 200 万次 strided 写，每帧白花 2~3 ms；整像素 OR 之后访存变成
-	// 连续，同样的结果只花 0.4 ms。RGBA 里 A 是第 4 个字节，小端 32 位读出来的
-	// 就是 0xAABBGGRR —— 所以置位用的是最高字节 0xFF000000。
-	{
-		uint32_t *p = (uint32_t *)(void *)f->buf_out;
-		const size_t px = (size_t)cx * cy;
-		for (size_t k = 0; k < px; k++)
-			p[k] |= 0xFF000000u;
+	/* 1.0.8.0：这里原来有一遍「全帧 207 万次 32 位读改写把 A 置 255」（1080p
+	 * 实测约 0.4 ms）。现在由引擎在输出的最后一步做（beauty_core.cpp 的
+	 * forceOpaque），那一刻 dst 刚被写过、还在 cache 里，同一件事便宜 3~4 倍。
+	 * 上传段因此只剩 gs_texture_set_image 自己。
+	 *
+	 * 1.0.10.0：BEAUTY_ALPHA_IN_ENGINE=0 时引擎不碰 A，这里必须补回来 ——
+	 * 否则 OBS 合成出来是黑的。这条分支只为真机对照实验存在。 */
+	if (!skip_sdk && !beautyCoreAlphaInEngine()) {
+		uint32_t *pa = (uint32_t *)(void *)f->buf_out;
+		const size_t pxa = (size_t)cx * cy;
+		for (size_t k = 0; k < pxa; k++)
+			pa[k] |= 0xFF000000u;
 	}
 
 	// The first self-check compares the engine output before display transforms.
 	// Save both metrics before buf_in is reused as the rotation scratch buffer.
 	const double detail_in_check =
-		!f->verified && !skip_sdk ? frame_detail(f->buf_in, cx, cy) : 0.0;
+		!f->verified && !skip_sdk ? frame_detail(in_p, cx, cy) : 0.0;
 	const double detail_out_check =
 		!f->verified && !skip_sdk ? frame_detail(f->buf_out, cx, cy) : 0.0;
 
-	if (f->mirror)
+	/* 零拷贝路径的 map 到这里才放开：引擎、细节自检都读完了 in_p。
+	 * 必须在下面的 self-check 之前 —— 那里会再 gs_stage_texture + map 一次
+	 * f->stage，surface 还锁着的话那一步会失败。
+	 * unmap 的耗时计进「下载」那一项，否则零拷贝会把成本藏到别处去。 */
+	if (mapped_held) {
+		const double t_un = f->prof_on ? beauty_now_ms() : 0.0;
+		gs_stagesurface_unmap(f->stage);
+		if (f->prof_on)
+			f->prof_dl += beauty_now_ms() - t_un;
+		mapped_held = false;
+	}
+
+	if (snap.mirror)
 		frame_mirror(f->buf_out, cx, cy);
 
 	gs_texture_set_image(f->out_tex, f->buf_out, cx * 4, false);
@@ -765,10 +935,27 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 			     (unsigned long long)al_du, (unsigned long long)al_dt,
 			     al_dt ? (double)al_du * 100.0 / (double)al_dt : 100.0,
 			     (unsigned long long)nf_du);
+			// 1.0.9.0：引擎内部分段（同一窗口的均值）。0=检测+掩码 1=磨皮
+			// 2=色调 3=细节 4=美形+A通道。四项相加不等于引擎总时 —— 差值
+			// 是掩码/ROI 之外的公共开销，留在「引擎」那一项里由人均摊。
+			int rw = 0, rh = 0, rpx = 0;
+			beautyEngine().lastRoi(&rw, &rh, &rpx);
+			blog(LOG_INFO,
+			     "[" PLUGIN_NAME "] 分段：检测+掩码 %.2f | 磨皮 %.2f | 色调 %.2f"
+			     " | 细节 %.2f | 美形+alpha %.2f | ROI %dx%d 掩码 %d"
+			     " | 盒块 %d 阈值 %d par_copy=%d alpha=%s fuse=%d",
+			     f->prof_st[0] / n, f->prof_st[1] / n, f->prof_st[2] / n,
+			     f->prof_st[3] / n, f->prof_st[4] / n, rw, rh, rpx,
+			     beautycore::boxBlockWidth(), beautycore::boxMinPixels(),
+			     beautycore::parCopyOn(),
+			     beautyCoreAlphaInEngine() ? "eng" : "plugin",
+			     beautycore::boxFuseOn());
 			f->prof_frames = 0;
 			f->prof_dl = 0.0;
 			f->prof_proc = 0.0;
 			f->prof_up = 0.0;
+			for (int i = 0; i < 6; i++)
+				f->prof_st[i] = 0.0;
 		}
 	}
 
@@ -809,7 +996,7 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 			     detail_in_check > 0.0
 				     ? (detail_out_check / detail_in_check - 1.0) * 100.0
 				     : 0.0,
-			     f->blur_type, f->v[BEAUTY_IDX_BLUR], f->skin_detect, e.lastFaces(),
+			     snap.blur_type, snap.v[BEAUTY_IDX_BLUR], snap.skin_detect, e.lastFaces(),
 			     e.id(), region_state(e), e.lastCoreMs());
 		} else {
 			blog(LOG_WARNING, "[" PLUGIN_NAME "] self-check: could not map out_tex");
@@ -887,6 +1074,15 @@ const char *obs_module_description(void)
 
 bool obs_module_load(void)
 {
+	// 1.0.13.10（C-2/C-3）：先说清楚这一份 DLL 到底读不读 BEAUTY_* 环境变量。
+	// 发布版加锁后所有覆盖一律失效，而“设了变量但没变化”是最难查的一类现象，
+	// 所以这一行必须在所有其他日志之前打。台架（05_验证）也靠这两个不同字面串分辨加锁版。
+#ifdef BEAUTY_ENV_LOCK
+	blog(LOG_INFO, "[" PLUGIN_NAME "] env override: locked (release build)");
+#else
+	blog(LOG_INFO, "[" PLUGIN_NAME "] env override: open (dev build)");
+#endif
+
 	// 引擎日志接进 OBS 日志系统；不接的话引擎消息会写到 stderr（OBS 里看不到）。
 	beauty_set_log_fn(beauty_obs_log);
 
@@ -919,6 +1115,41 @@ bool obs_module_load(void)
 		// 排除「被 BEAUTY_NOFACE_SKIP=0 回退掉了」这种可能。
 		msg += ", noface_skip=";
 		msg += beautyCoreNoFaceSkip() ? "on" : "off";
+		// 2026-11-09：band 磨皮是否吃 ROI。这一位是「这一份二进制到底是不是
+		// 带 ROI 裁剪的构建」的唯一日志证据——装机目录、自定义 OBS_PLUGINS_PATH
+		// 目录可能同时存在两份同名 DLL，只有注册成功的那个会打这一行。
+		msg += ", band_roi=";
+		msg += "crop";
+		// 2026-11-09（1.0.5.0）：头歪补偿在不在。与 band_roi 同理，是「手上这一份
+		// 到底是不是 1.0.5.0」的证据；顺带把 ±45 探测的开关状态和阈值打出来，
+		// 排查「歪头没效果」时不用再猜是不是被 BEAUTY_AUTO_ROLL=0 关掉了。
+		msg += ", roll_probe=";
+		msg += beautyCoreAutoRoll() ? "on" : "off";
+		// 2026-11-09（1.0.7.0）：脖子通道有没有按立正方向重画。`dir` = 参数化到
+		// (u,v) 的版本；`off` = 被 BEAUTY_NECK=0 关掉。旧版（≤1.0.5.0）打不出来，
+		// 所以这一位同时是「装机的那份到底是不是 1.0.7.0」的证据。
+		msg += ", neck=";
+		msg += beautyCoreNeckOn() ? "dir" : "off";
+		// 1.0.9.0：盒式的两个可调项。对照实验必须能证明「跑的是哪一档」，
+		// 否则同一台机器上的两组数据可能根本不是同一份配置。
+		msg += ", box_block=";
+		msg += std::to_string(beautycore::boxBlockWidth());
+		msg += ", box_minpx=";
+		msg += std::to_string(beautycore::boxMinPixels());
+		// 1.0.10.0：A2 / A4 两处 1.0.8.0 改动的开关状态。
+		msg += ", par_copy=";
+		msg += beautycore::parCopyOn() ? "on" : "off";
+		msg += ", alpha=";
+		msg += beautyCoreAlphaInEngine() ? "engine" : "plugin";
+		// 1.0.11.0：下载零拷贝开关（默认 off）。真机对照要靠这一位确认跑的是哪条路。
+		msg += ", zc=";
+		msg += beauty_zero_copy() ? "on" : "off";
+		msg += ", tone_lut=";
+		msg += beautycore::toneIntLutOn() ? "int" : "float";
+		// 1.0.13.0：磨皮低频层是否走三通道融合 + SSE 垂直趟。两条路径逐位等价，
+		// 这一位只用来确认对照实验里跑的是哪一条。
+		msg += ", fuse=";
+		msg += beautycore::boxFuseOn() ? "on" : "off";
 		msg += ")";
 		blog(LOG_INFO, "[" PLUGIN_NAME "] %s", msg.c_str());
 		// C20：皮肤判据快照。真机「磨皮没效果」的头号原因是肤色掩码被白平衡

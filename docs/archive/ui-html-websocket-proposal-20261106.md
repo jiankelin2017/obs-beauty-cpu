@@ -25,7 +25,7 @@
    **方式一 · 手动添加（最快，10 秒，OBS 开着也能做）**
    OBS 菜单 **停靠窗口(D) → 自定义浏览器停靠窗口...(C)**，填两项后点「应用」：
    - 标题：`美颜面板`
-   - URL：`file:///C:/Users/<user>/Documents/deepseek-harness/default-workspace/beauty-standalone/beauty_panel/index.html`
+   - URL：`file:///<用户目录>/Documents/deepseek-harness/default-workspace/beauty-standalone/beauty_panel/index.html`
 
    OBS 退出时会自己把它写进配置，下次启动就自动带出来。
 

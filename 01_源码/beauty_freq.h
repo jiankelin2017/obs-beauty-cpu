@@ -129,8 +129,20 @@ struct FreqParams {
 //   clarity 0..1 清晰强度（面板值 /100）
 //   whiten  0..1 美白强度
 //   rosy    0..1 红润强度
-// 只在 roi 内、且 mask>0 的像素上动手（参考实现是整帧生效，我们保持"只动脸"）。
-void toneColor(unsigned char* dst, int w, int h,
+//
+// 作用范围：**默认整帧**（不乘 mask、不看 roi），与参考实现 / GPU 版
+// `BEAUTY_TONE_GLOBAL=1` 同口径。理由见 beauty_freq.cpp 里 toneGlobal() 的注释：
+// 这三段是纯颜色表，乘上掩码就等于给画面画了一条掩码形状的色界 —— 手遮脸时
+// 那条色界正好切在手背上，表现为「美白遮罩叠在手部」。
+// `BEAUTY_TONE_GLOBAL=0` 恢复 1.0.1.0 及以前的行为（只在 roi 内、mask>0 的
+// 像素上施加）。mask / roi 两个入参在整帧模式下被忽略，保留是为了不改调用点。
+//
+// 返回值（1.0.12.0 / A6）：true 表示「整帧每个像素的 A 已被置成 255」，
+// 调用方不必再跑一遍 forceOpaque。只有走整数复合表的整帧分支才会返回 true
+// —— 那时它本来就要逐像素写 R/G/B，顺手写 A 是零边际成本；其它分支
+// （三段全 0 提前返回、`BEAUTY_TONE_GLOBAL=0` 掩码模式、`BEAUTY_TONE_LUT=0`
+// 浮点模式）一律返回 false，由调用方兜底。
+bool toneColor(unsigned char* dst, int w, int h,
                const unsigned char* mask, const RoiRect& roi,
                float clarity, float whiten, float rosy, int threads);
 
@@ -138,6 +150,11 @@ void toneColor(unsigned char* dst, int w, int h,
 void toneWhitenRosy(unsigned char* dst, int w, int h,
                     const unsigned char* mask, const RoiRect& roi,
                     float whiten, float rosy, int threads);
+
+// 1.0.11.0（A3）：整帧色调是否走「整数复合表」。
+// 默认开；`BEAUTY_TONE_LUT=0` 回到逐像素浮点插值。两者逐字节等价，开关只为
+// 真机对照实验存在（同一台机器、同一次装机里 A/B 一遍就能量出这 3 ms）。
+bool toneIntLutOn();
 
 // 一站式：高斯拉低 + 幅度门控合成。scratch/low 由内部复用调用方缓冲。
 void highLowSmooth(const unsigned char* src, unsigned char* dst,
