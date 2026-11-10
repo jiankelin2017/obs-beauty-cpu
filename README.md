@@ -149,7 +149,6 @@ obs-beauty-ui.dll · 菜单「美颜·CPU(&A)」（仅 CPU 宏开启）
 | `06_安装包\` | NSIS / 构建 / 测试脚本 + `OBS美颜_CPU_v1.0.14.0.exe` |
 | `docs\` | 当前版文档体系 |
 | `_quarantine\` | 隔离区（`.gitignore` 排除，不得对外分发） |
-| `参考文件\` | 仅本机保留，不入库 |
 
 ---
 
