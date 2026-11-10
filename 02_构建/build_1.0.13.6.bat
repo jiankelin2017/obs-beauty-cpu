@@ -4,7 +4,6 @@ rem
 rem  1.0.13.6 = "head tilted ~45 deg: the picture blinks / hitches once".
 rem  Four things were stacked; only (4) came from 1.0.13.5.
 rem
-rem  (1) YuNet cannot detect a face tilted by ~40+ deg. The roll probe only
 rem      starts after g_cfg.rollMiss consecutive misses. Traced frame by frame
 rem      on face_src rotated 45 deg: f00..f07 = no face, f08 = probe locks on.
 rem      Mask survived on kMaskHold, which was 6 - and it counts MISSES, not

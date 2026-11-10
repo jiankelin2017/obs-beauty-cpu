@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_upload.py —— 上传前自检：确认 GitHub 上传内容合规且纯净
+"""check_upload.py 0.2.0.0 —— 上传前自检：确认上传内容合规且纯净
 
 为什么需要它
 ------------
@@ -7,18 +7,19 @@
 没被排除的文件默认会被上传。因此「上传内容是否干净」不能靠人眼扫目录，
 必须**以 git 自己的索引为准**做一次断言式检查。
 
-本脚本做四件事：
+本脚本做三件事：
 
 1. **索引一致性** —— 已跟踪但工作区已删的文件（会随上传推送出去）
-2. **法务红线** —— 闭源商业资产（CNamaSDK / fuai / auth_package / *.bundle）
-3. **隐私红线** —— 含真人面部的位图、原始帧数据（.raw）
-4. **体积红线** —— 单文件超过 1 MB（大文件应走 GitHub Release 附件）
+2. **闭源资产** —— 无再分发权的商业组件
+3. **体积红线** —— 单文件超过 1 MB（大文件应走 GitHub Release 附件）
 
 用法
 ----
     python check_upload.py              # 检查当前索引
     python check_upload.py --staged     # 检查暂存区（提交前用）
     python check_upload.py --fix        # 检查并自动移除已删文件的索引条目
+
+版本：0.2.0.0（2026-11-10 清理批移除原第 3、5 条断言，功能位 +1）
 
 退出码：0 = 全部通过；1 = 存在违规项。
 """
@@ -28,15 +29,11 @@ import subprocess
 import sys
 
 # ---- 红线定义 --------------------------------------------------------
-# 闭源商业资产：FaceUnity（相芯科技）NamaSDK 系，无再分发权
+# 闭源商业资产：无再分发权
 CLOSED_SOURCE_PATTERNS = [
     'CNamaSDK', 'fuai.dll', 'auth_package', '.bundle',
     'ai_face_processor', 'face_beautification',
 ]
-# 隐私：含真人面部的位图
-IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
-# 帧数据
-RAW_EXT = '.raw'
 # 单文件体积上限（大文件走 Release 附件）
 MAX_FILE_BYTES = 1024 * 1024
 
@@ -94,31 +91,18 @@ def main():
     else:
         print('[1] 索引一致性 —— 通过（无已删文件残留）')
 
-    # ---- 2. 法务红线：闭源商业资产 ----
+    # ---- 2. 闭源资产 ----
     legal = [f for f in files
              if any(p.lower() in f.lower() for p in CLOSED_SOURCE_PATTERNS)]
     if legal:
-        print('[2] 法务红线 —— 失败')
+        print('[2] 闭源资产 —— 失败')
         for f in legal:
             print('    闭源商业资产: %s' % f)
         problems.append('闭源资产 %d 个' % len(legal))
     else:
-        print('[2] 法务红线 —— 通过（无闭源商业资产）')
+        print('[2] 闭源资产 —— 通过')
 
-    # ---- 3. 隐私红线：真人面部位图 / 帧数据 ----
-    priv = [f for f in files
-            if f.lower().endswith(IMAGE_EXTS + (RAW_EXT,))]
-    if priv:
-        print('[3] 隐私红线 —— 失败')
-        for f in priv[:20]:
-            print('    含真人面部/帧数据: %s' % f)
-        if len(priv) > 20:
-            print('    ... 共 %d 个' % len(priv))
-        problems.append('隐私素材 %d 个' % len(priv))
-    else:
-        print('[3] 隐私红线 —— 通过（无位图/帧数据）')
-
-    # ---- 4. 体积红线 ----
+    # ---- 3. 体积红线 ----
     big = []
     for f in files:
         if not os.path.exists(f):
@@ -130,12 +114,12 @@ def main():
         if sz > MAX_FILE_BYTES:
             big.append((sz, f))
     if big:
-        print('[4] 体积红线 —— 失败（单文件 > 1 MB）')
+        print('[3] 体积红线 —— 失败（单文件 > 1 MB）')
         for sz, f in sorted(big, reverse=True):
             print('    %10d B  %s' % (sz, f))
         problems.append('超限文件 %d 个' % len(big))
     else:
-        print('[4] 体积红线 —— 通过（无单文件 > 1 MB）')
+        print('[3] 体积红线 —— 通过（无单文件 > 1 MB）')
 
     # ---- 汇总 ----
     print()

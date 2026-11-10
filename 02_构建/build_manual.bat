@@ -29,7 +29,6 @@ set OFFDIR=
 
 rem --- locate the source dir: the one holding obs-beauty.cpp --------------
 for /d %%d in ("%ROOT%\01_*") do if exist "%%d\obs-beauty.cpp" set SRC=%%d
-rem --- locate the dependency dir: holds obs-studio-32.1.1\libobs ---------
 rem     it may sit at the tree root or one level down (e.g. under a
 rem     "reference files" folder), so probe both depths.
 for /d %%d in ("%ROOT%\*") do if exist "%%d\obs-studio-32.1.1\libobs" set DEP=%%d

@@ -3,7 +3,7 @@
 import os
 import shutil
 
-OUTDIR = r"C:/Users/<user>/AppData/Local/Temp/legacy_309"
+OUTDIR = os.path.join(os.path.expanduser("~"), "AppData/Local/Temp/legacy_309")
 SRC_DLL = r"D:/插件/obs-beauty-filter/obs-plugin-build/build/obs-beauty.dll"
 
 BODY = r"""@echo off

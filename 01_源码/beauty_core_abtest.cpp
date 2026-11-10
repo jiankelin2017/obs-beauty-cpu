@@ -10,7 +10,6 @@
 // 用法：
 //   beauty_core_abtest.exe [impl] [engineDir] [rawIn w h]
 //     impl       = legacy / passthrough / core
-//     engineDir  = 引擎数据目录（含 参考实现美颜库.dll），用于跑真实 参考实现
 //     rawIn w h  = 裸 RGBA8 输入与尺寸，给出时才跑第 3 项对比
 //
 // 编译见 06_离线验证/build_beauty_core_abtest.bat

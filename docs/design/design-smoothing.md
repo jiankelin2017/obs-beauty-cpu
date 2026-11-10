@@ -9,11 +9,8 @@
 | 状态 | `Active`（架构 / 开关有效；**历史轴实测数字未重测**） |
 | 替代文档 | 归档 `docs/archive/c02-edge-gate-20261106.md`（`Deprecated`）、`c04-highlow-freq-20261106.md`、`c07-guided-filter-20261106.md`、`c08-lowfreq-compare-20261106.md`、`c15-box-lowpass-20261106.md` |
 
-> **归档重建声明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件已按 `MANIFEST.tsv` 逐字恢复，
-> MD5 与字节数 38/38 一致；文首均标「ARCHIVED · 已废弃，见 xxx」，状态 `Deprecated`、**不得据此施工**。
-> 文中以 `docs/archive/` 开头的路径现在指向真实存在的归档件，读者可据此溯源，但不得当作现状引用。
-> 有效结论（含正向与负向／证伪结论）只在唯一 Active 文档留存一份，去向总表见
-> `docs/reference/reference-conclusions.md`；`docs/INDEX.md` §2 登记 38 行归档件。
+> **归档说明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件保留并标注 `Deprecated`，
+> 按同日清理裁定已移除来源段落；有效结论只在 Active 文档留存一份。
 
 > **本文只保留结论 / 开关 / 坑 / 证伪 / 失效说明。**
 > 按 2026-11-06 裁定，**完全不搬历史轴的数字表格**：扫参表、保留率、耗时、加速比、SHA256
@@ -50,13 +47,10 @@
 | 路线 | 结论 | 当前状态 |
 |---|---|---|
 | 引导滤波（`c07`） | 技术上消除了阶梯效应，但 **CPU 上不划算** | 默认关闭 `freqLowMode=0`（环境变量 `BEAUTY_LOW_MODE`）；`BEAUTY_GUIDE_R` / `BEAUTY_GUIDE_EPS` / `BeautyCoreSetGuide()` 保留可回退 |
-| 浮点双边迭代（`uint8→float`）（`c08`、`oss-survey` §7.7） | 无收益 | `lowPath=1` 保留但不投产 |
-| 「减去大半径差」低频参照（`c08`、`oss-survey` §7.7） | 无收益，且更慢 | `lowPath=2` 保留但不投产 |
 | 盒式之外的路线 | 两条保留不删的理由见 `c08`：换更大半径核时可能才起作用；也是 ROI 局部浮点平面基础设施的唯一使用者 | — |
 | 降采样 / 半分辨率磨皮（`ab-smooth`） | 曲线对不上，失败 | 不采纳；与 §2 全分辨率红线一致 |
 | 引导滤波赢过双边（`ab-smooth`） | 未赢过 | 与 `c07` 结论一致 |
 | 椭圆 mask 替代「肤色 ∩ 人脸框」（`c02` §4） | 不可行 | 见 `docs/design/design-face-mask.md` |
-| `oss-survey` §7.2「分分辨率做法」 | 属调研记录，**与 `c04` §7 全分辨率红线冲突** | 不采纳，引用该件时不得把 GPU 化论证一并带入 |
 
 **指标口径的坑（`c08`）**：「小幅度高频保留%」这个指标本身不可靠，应用「脸颊台阶像素占比」替代；
 `ab-smooth` 的曲线 RMSE 只是**曲线拟合**，不是结构同一性；`ab-metric` 的「ROI 全区域」读数受块均值稀释，
@@ -64,7 +58,6 @@
 
 ## 4. 边缘门控的三个坑（`c02` §2）
 
-- **照搬第三方的 ×10 灵敏度会少磨一大截**：同一个 `BEAUTY_EDGE_K` 在不同核尺度下不等价。
 - **Sobel 标的是边缘线、不是区域**：拿它当「哪里该磨」的区域判据会把整片脸颊放过。
 - **用 `|Laplacian|` 评价边缘保护会得到相反结论**：它是二阶差分，与「台阶被抹平」不是同一件事。
 
@@ -90,7 +83,6 @@
 ## 7. 失效说明（不得据此施工）
 
 - 归档件全部是历史轴 `3.1.x / CoreEngine 0.x` 口径，**非当前 CPU `1.0.0.0`**。
-- 路径已变：`00_源码` → `01_源码`、`06_离线验证` → `05_验证`、`09_开源参考` → `07_开源参考`。
 - 全部毫秒数、加速比、百分比、保留率表、扫参表、SHA256、DLL 大小 **未在 CPU `1.0.0.0` 重测**，也不进本文。
 - `c15` 头注的「真机未验收」状态已失效；`c09` / `c10` / `c12` 引用的 `D1` 步骤编号与 `ab-*` 文档编号同名异义。
 - `ref_golden.dll` 只是 `05_验证/ref_driver/` 的离线基准 DLL（条件编译 `BEAUTY_WITH_LEGACY_ENGINE`），插件不编译。
@@ -104,7 +96,6 @@
 | `docs/archive/c07-guided-filter-20261106.md`（`Deprecated`） | 引导滤波在 CPU 上不划算、默认关闭、回退开关 |
 | `docs/archive/c08-lowfreq-compare-20261106.md`（`Deprecated`） | 两条低频路线证伪、指标口径坑、代码保留理由 |
 | `docs/archive/c15-box-lowpass-20261106.md`（`Deprecated`） | 盒式低通落地、调参顺序、反直觉结论、ROI 对齐 bug |
-| `docs/archive/oss-survey-20261106.md`（`Deprecated`） | §7.7 两项无收益结论（**只取这一节**，不取 GPU 化论证） |
 | `docs/archive/ab-smooth-20261106.md`（`Deprecated`） | 降采样失败、引导滤波未赢过双边、曲线拟合 ≠ 结构同一性 |
 | `docs/archive/tech-roadmap-20261106.md`（`Deprecated`） | §6「不上 GPU」结论；`S1/S2/S3` 命名陷阱 |
 

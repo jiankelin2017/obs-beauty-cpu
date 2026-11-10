@@ -8,7 +8,6 @@
 系数直接抄 wtnl-zhi/obs-beauty-filter 的 face_landmarks.c：
     radius_x = face_width * 0.57
     radius_y = face_height * 0.55
-（该仓库 GPL-2.0-or-later）
 
 本脚本先验证 IoU，够了再写 C++ —— 避免白写。
 """

@@ -4,7 +4,6 @@ rem  install_1.0.13.6.bat - OVERWRITE the installed CPU filter + UI dll with 1.0
 rem
 rem  1.0.13.6 = "head tilted ~45 deg: the picture blinks / hitches once".
 rem              Four stacked causes; only the last came from 1.0.13.6.
-rem              (1) YuNet cannot detect a face tilted ~40+ deg; the roll probe
 rem                  needs rollMiss consecutive misses, and the mask hold was
 rem                  shorter than that gap, so smoothing + warp dropped for
 rem                  two frames -> the blink. rollMiss 8->4, kMaskHold 6->8.
@@ -32,7 +31,6 @@ rem    2) copy obs-beauty.dll      -> ...\plugins\obs-beauty\bin\64bit\
 rem       copy obs-beauty-ui.dll   -> ...\plugins\obs-beauty-ui\bin\64bit\
 rem    3) print MD5 of both, so the caller can confirm which build is live
 rem
-rem  Only two files change. onnxruntime.dll and models\yunet.onnx stay as-is.
 rem  Keep this file PURE ASCII + CRLF: cmd.exe reads .bat as GBK.
 rem ===========================================================================
 setlocal enabledelayedexpansion

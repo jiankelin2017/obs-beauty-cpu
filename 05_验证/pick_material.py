@@ -37,7 +37,9 @@ if hasattr(sys.stdout, "reconfigure"):
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = r"D:\100MSDCF"
 MODEL = os.path.join(HERE, "models", "yunet.onnx")
-OUT_CSV = os.path.join(HERE, "_material_scan.csv")
+# 默认写到系统临时目录，不再写回仓库；可用 BEAUTY_MATERIAL_CSV 覆盖。
+OUT_CSV = os.environ.get("BEAUTY_MATERIAL_CSV") or os.path.join(
+    tempfile.gettempdir(), "_material_scan.csv")
 
 LONG_EDGE = 1280      # 检测用的长边（YuNet 内部还会缩到 640）
 SCORE_THR = 0.6       # 置信度门限，与插件一致

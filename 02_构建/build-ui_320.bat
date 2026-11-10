@@ -31,7 +31,6 @@ set DEP=
 
 rem --- locate the source dir: the one holding obs-beauty-ui.cpp ----------
 for /d %%d in ("%ROOT%\01_*") do if exist "%%d\obs-beauty-ui.cpp" set SRC=%%d
-rem --- locate the dependency dir: holds obs-studio-32.1.1\libobs ---------
 rem     it may sit at the tree root or one level down, so probe both depths.
 for /d %%d in ("%ROOT%\*") do if exist "%%d\obs-studio-32.1.1\libobs" set DEP=%%d
 for /d %%d in ("%ROOT%\*") do for /d %%e in ("%%d\*") do if exist "%%e\obs-studio-32.1.1\libobs" set DEP=%%e

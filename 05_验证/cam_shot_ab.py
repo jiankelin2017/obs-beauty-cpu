@@ -29,7 +29,7 @@ from PIL import Image, ImageOps
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-HERE = r"C:\Users\<user>\.workbuddy\clipboard-images"
+HERE = os.path.join(os.path.expanduser("~"), ".workbuddy/clipboard-images")
 MODEL = r"D:\插件\OBS美颜\06_离线验证\models\yunet.onnx"
 
 # 时间 = 文件名里的时间戳；引擎与档位由用户标注

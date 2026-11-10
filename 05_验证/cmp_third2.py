@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath("."))
 import numpy as np
 from PIL import Image, ImageFilter
 
-THIRD = r"C:/Users/<user>/.workbuddy-ai/clipboard-images/clipboard-2026-10-25T06-17-22-186Z-4f596de6.jpg"
+THIRD = os.path.join(os.path.expanduser("~"), ".workbuddy-ai/clipboard-images/clipboard-2026-10-25T06-17-22-186Z-4f596de6.jpg")
 CROP  = (0, 30, 1140, 713)
 FACE_W = 400
 
@@ -39,7 +39,6 @@ def bands(a, m):
                 hf=float((a-b1)[m].std()), mid=float((b1-b3)[m].std()),
                 low=float((b3-b7)[m].std()), n=int(m.sum()))
 
-# 第三方
 th = np.asarray(Image.open(THIRD).convert("RGB").crop(CROP)).astype(np.float32)
 H, W, _ = th.shape
 box = np.zeros((H, W), bool); box[20:600, 340:860] = True

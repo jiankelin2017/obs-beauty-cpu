@@ -19,7 +19,6 @@ rem      failure the struct is left untouched and the next frame retries.
 rem
 rem  C-2 / C-3 (hidden knobs). 115 BEAUTY_* env overrides used to be read
 rem      directly by getenv in EVERY build, release included. The worst one was
-rem      BEAUTY_FACE_MODEL, which could point the plugin at an arbitrary .onnx.
 rem      Fix: all of them now go through beauty_env() in beauty_env.h, and the
 rem      RELEASE build defines BEAUTY_ENV_LOCK, so they are all inert (MSVC
 rem      folds the branches away: the dll drops from 506,880 to 463,872 bytes).
@@ -46,7 +45,6 @@ rem    2) copy obs-beauty.dll      -> ...\plugins\obs-beauty\bin\64bit\
 rem       copy obs-beauty-ui.dll   -> ...\plugins\obs-beauty-ui\bin\64bit\
 rem    3) print MD5 of both, so the caller can confirm which build is live
 rem
-rem  Only two files change. onnxruntime.dll and models\yunet.onnx stay as-is.
 rem  Keep this file PURE ASCII + CRLF: cmd.exe reads .bat as GBK.
 rem ===========================================================================
 setlocal enabledelayedexpansion

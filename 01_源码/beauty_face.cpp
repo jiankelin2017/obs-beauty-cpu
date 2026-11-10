@@ -1,4 +1,3 @@
-// beauty_face.cpp —— YuNet 人脸检测实现（前处理 + 推理 + 解码 + NMS）
 //
 // 解码公式是从实测反推的（640×640 上 cv2.FaceDetectorYN 当真值校准）：
 //     cx = (col + bx) * stride
@@ -26,7 +25,6 @@ namespace {
 // 默认推理边长。实际值放在 FaceDetector::inputSize_ 里（可运行期调整）。
 const int kDefaultInputSize = 640;
 
-// 推理线程数。YuNet 640x640 单线程约 15 ms，是整条链最贵的一步；
 // 给 2 个线程就能砍掉近一半，且不会把 OBS 的编码线程挤掉（编码通常占 4~6 核）。
 const int kInferThreads = 2;
 const int kStrides[3] = {8, 16, 32};
@@ -42,8 +40,6 @@ double nowMs() {
 // 等比缩放 + 居中 letterbox 到 640x640。
 //
 // 为什么不用直接拉伸：OBS 的视频帧多是 16:9，直接拉成正方形会把脸横向压扁
-// （变形 1.8 倍），YuNet 的长宽比先验会被破坏。letterbox 保持比例，代价是黑边，
-// 与 OpenCV FaceDetectorYN 的默认行为也一致，便于用 cv2 当真值校准。
 void letterboxRgb(const unsigned char* src, int sw, int sh, int stride,
                   unsigned char* dst, int dw, int dh,
                   float& scale, int& ox, int& oy) {
@@ -243,7 +239,6 @@ bool FaceDetector::load(const char* modelPath, std::string& err) {
         delete m;
         return false;
     }
-    // 形状校验：YuNet 2023mar 导出的是动态 shape（实测 320/480/640 都能跑），
     // 但别家导出的可能是固定 shape —— 那种情况下要跟着模型走，否则推理会报错。
     const std::vector<int64_t>& sh = m->inputShape();
     if (sh.size() != 4 || sh[1] != 3) {

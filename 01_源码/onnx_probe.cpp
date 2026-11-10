@@ -1,6 +1,4 @@
-// onnx_probe —— 验证 ONNX Runtime 封装能加载模型并跑通推理（离线工具，不进插件）
 //
-// 用法：onnx_probe.exe <模型路径(ASCII)>
 
 #include "beauty_onnx.h"
 
@@ -25,7 +23,6 @@ int main(int argc, char** argv) {
     for (int i = 0; i < m.outputCount(); i++)
         printf("  out[%d] name=%s\n", i, m.outputName(i));
 
-    // 按模型声明的形状喂输入。YuNet 2023mar 是固定 640x640、12 个输出
     // （cls/obj/bbox/kps × stride 8/16/32）。
     std::vector<int64_t> shape = m.inputShape();
     for (auto& d : shape)

@@ -7,6 +7,6 @@ d=ctypes.WinDLL(os.path.join(HERE,dll))
 f=getattr(d,fn); f.restype=ctypes.c_int
 arr=(ctypes.c_double*11)(0,0,0,0,0,0,0,0,0,0,0); arr[0]=100.0
 msg=ctypes.create_string_buffer(512)
-rc=f(b'C:/btwork/engine', raw.encode(), b'C:/Users/<user>/AppData/Local/Temp/_probe_out.raw',
+rc=f(b'C:/btwork/engine', raw.encode(), os.path.join(os.path.expanduser("~"), "AppData/Local/Temp/_probe_out.raw").encode(),
        W,H,arr,11,-1,1,0,1,msg,512)
 print('rc=%d msg=%s' % (rc, msg.value.decode('utf-8','replace')[:120]))

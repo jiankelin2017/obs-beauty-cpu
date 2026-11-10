@@ -1,7 +1,6 @@
 // core_probe.cpp —— 自研引擎（CoreEngine）的离线对拍入口
 //
 // 只编译进离线验证 DLL，不进 OBS 插件 DLL。
-// 目的：不加载参考实现就能跑自研核，把它和 参考实现的 golden 输出逐档对拍。
 //
 // 用法：进程内先设 BEAUTY_ENGINE_IMPL=core，再调 beautyEngine() 拿到 CoreEngine。
 // 导出（__stdcall，ctypes 用 WinDLL 调用）：
@@ -123,7 +122,6 @@ static int runCoreSlot(int slot, const char* rawIn, const char* rawOut,
         setMsg(msgBuf, msgCap, "engine is '%s', not core", e.id());
         return 5;
     }
-    // 必须显式初始化：CoreEngine 在这里加载 YuNet 模型（OBS 里由 preheat 触发）。
     // 少了这一步，掩码永远是「不可用」，磨皮会退化成全帧。
     {
         std::string ierr;
@@ -362,7 +360,6 @@ __declspec(dllexport) int __stdcall BeautyCoreFaceSlot(
 // 把自研引擎这一帧的掩码落盘，格式与 BeautyDumpMask 一致
 // （8 字节头：int32 mw, int32 mh；随后 mw*mh 字节 0/255）。
 //
-// 存在的理由：自研只磨「肤色 ∩ 人脸框」，参考实现的改动区更大（含脖子/肩）。
 // 对拍必须用自研掩码当分母，否则「只磨了脸」会被读成「几乎没磨」。
 __declspec(dllexport) int __stdcall BeautyCoreMask(
     const char* rawIn, int width, int height,

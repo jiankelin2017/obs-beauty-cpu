@@ -1,11 +1,9 @@
-// obs-beauty —— OBS 美颜滤镜（自研实现，无参考实现美颜库依赖）
 //
 // 结构：
 //   obs-beauty.cpp     OBS 胶水层：属性页、帧捕获、CPU 回传、绘制、性能埋点
 //   beauty_core.cpp    引擎抽象 + CoreEngine（自研实现，唯一的生产路径）
 //   beauty_smooth.cpp  磨皮核（三层表面模糊 / 双尺度带通 + 振幅门控）
 //   beauty_freq.cpp    色调（清晰 / 美白 / 红润）与细节回填（锐化）
-//   beauty_face.cpp    人脸检测/关键点（YuNet ONNX 模型）
 //   beauty_region.cpp  五官局部五项
 //
 // 数据流（每帧）：
@@ -58,7 +56,6 @@
 // ---------------------------------------------------------------------------
 // 引擎 → OBS 日志钩子。模块加载时装一次；不装的话引擎消息落到 stderr。
 //
-// ⚠ blog() 在 libobs 里**没有** printf 格式标注，编译器（/W3）不会检查格式串与
 // 参数是否配对。3.1.4 就因此崩过：给 init OK 加了 engine=%s/%s 却忘了删掉后面
 // 的 sdk=%s，7 个占位符配 6 个参数，region=%s 拿到的是整数 itemId，ucrtbase
 // 解引用 0x5350 直接访问违例，OBS 在模块加载阶段连崩两次。
@@ -75,7 +72,6 @@ static void beauty_obs_log(int level, const char* msg)
 
 // region 状态的措辞。两种引擎的 off 含义完全不同，日志里必须能分开看：
 //   旧链路 —— 没装 皮肤分割库 / 明文 bundle，退回 v1.4 的颜色启发式（画面仍然正常）；
-//   core —— YuNet 人脸模型没加载，updateMask() 直接返回 false，磨皮退化成全帧
 //           （背景一起磨、CPU 顶满），且清晰/美白/红润/五官五项/脸内锐化全部不执行。
 static const char *region_state(const IBeautyEngine &e)
 {
@@ -163,7 +159,6 @@ struct beauty_filter {
 	// 性能埋点（BEAUTY_PROFILE=1 时才统计/输出）
 	// 为什么要埋这个：插件每帧要把整帧从 GPU 下载到 CPU 再传回去，
 	// 1080p RGBA 是 8 MB × 2。这笔开销从未实测过，而它是「要不要整体
-	// 改走 GPU」的唯一决策依据。见 04_文档/开源参考仓库_对照与可复用清单.md §3。
 	bool prof_on;
 	int prof_frames;
 	double prof_dl;    // 累计下载耗时 ms
@@ -304,7 +299,6 @@ static bool beauty_zero_copy(void)
 // OBS 官方的跨模块查询通道：面板拿到滤镜 source 后调 beauty_version 就能拿到，
 // 老面板没有这个 proc 也只是显示不到，不会报错。
 // 只报 meta（不加载引擎、不读设置），任何滤镜实例无论状态都能答。
-// 签名注意：本版 libobs 的 proc 回调是 `(void *data, calldata_t *params)`，
 // 参数全走 calldata，obs_source 不做隐式注入（见 callback/proc.c 的 dispatch）。
 static void beauty_version_proc(void *, calldata_t *params)
 {
@@ -734,7 +728,6 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 
 	// 1) capture the upstream frame into our texrender.
 	//
-	//    This mirrors libobs obs_source_process_filter_begin_with_color_space()
 	//    (obs-source.c) exactly. Two details matter and are easy to get wrong:
 	//
 	//    a) the blend state + gs_clear before drawing the source;
@@ -1013,7 +1006,6 @@ static void beauty_filter_render(void *data, gs_effect_t *effect)
 	}
 	f->frame_id++;
 
-	// 5) draw -- mirrors libobs render_filter_tex() (obs-source.c).
 	//    Uses gs_technique_begin/begin_pass instead of gs_effect_loop():
 	//    gs_effect_loop() bails out with "An effect is already active" when
 	//    OBS has already begun a technique around our video_render call.
@@ -1157,7 +1149,6 @@ bool obs_module_load(void)
 		// 让用户能自查自适应有没有开、椭圆中心在哪。
 		blog(LOG_INFO, "[" PLUGIN_NAME "] %s", beautyCoreSkinInfo());
 
-		// 3.1.7 起默认引擎是自研核，它靠 YuNet 拿人脸掩码。掩码拿不到**不会崩**，
 		// 但会静默退化成「全帧磨皮」—— CPU 约 2.5 倍，而且清晰 / 美白 / 红润 /
 		// 五官五项 / 脸内锐化全部不执行。3.1.4 的用户看到的就是「CPU 22% + 个别
 		// 功能能用」，查了一整轮才发现是模型没加载。所以这里必须留一条 WARN，

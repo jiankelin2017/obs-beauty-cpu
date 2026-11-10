@@ -5,7 +5,6 @@
 // 为什么要有这一层：全库 116 处诊断开关（BEAUTY_ALIGN_DIFF、BEAUTY_ROLL_CHECK、
 // BEAUTY_FACE_MODEL、BEAUTY_NECK_* …）原来各自直接调 getenv，于是**发布版里
 // 也全部生效**。这带来两个问题：
-//   · 攻击面：BEAUTY_FACE_MODEL 能让插件去加载任意路径上的 .onnx，等于把一个
 //     文件解析入口交到"能改进程环境"的人手里；
 //   · 更现实的是支持成本：用户机器上残留一个 BEAUTY_ROLL_CHECK=0，行为就和
 //     文档不一致，而日志里没有任何痕迹。

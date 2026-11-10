@@ -3,7 +3,6 @@
 #
 #  做什么：
 #    1) 从 02_构建\build_<版本> 取滤镜/面板 DLL（CPU 线独立产物目录），
-#       从 05_验证 取 ONNX Runtime + YuNet
 #    2) 校验版本串（防止把旧构建打进包里 —— C13 坑 #1）
 #    3) 暂存到纯 ASCII 目录（NSIS 遇到中文源路径会报 no files found）
 #    4) 生成 README.txt / md5.txt

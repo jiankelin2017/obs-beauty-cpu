@@ -3,7 +3,7 @@
 import re
 import os
 
-THEIRS = r'C:\Users\<user>\AppData\Roaming\obsplus\plugins\obs-cam-beauty\bin\64bit'
+THEIRS = os.path.join(os.path.expanduser("~"), "AppData/Roaming/obsplus/plugins/obs-cam-beauty/bin/64bit")
 FILES = ['obs-cam-beauty_qt6.dll', 'obs-cam-beauty.dll', 'beauty.exe']
 
 

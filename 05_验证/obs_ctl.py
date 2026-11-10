@@ -32,7 +32,14 @@ import websocket  # websocket-client
 
 HOST = "127.0.0.1"
 PORT = 4455
-PASSWORD = "REDACTED"
+# 优先环境变量 OBS_WS_PASSWORD；其次未入库的本地文件 05_验证/.obs_ws_password。
+PASSWORD = os.environ.get("OBS_WS_PASSWORD", "").strip()
+if not PASSWORD:
+    _local_secret = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 ".obs_ws_password")
+    if os.path.isfile(_local_secret):
+        with open(_local_secret, "r", encoding="utf-8") as _fp:
+            PASSWORD = _fp.read().strip()
 OBS_EXE = r"C:\Program Files\obs-studio\bin\64bit\obs64.exe"
 OBS_DIR = os.path.dirname(OBS_EXE)
 SOURCE = "视频采集设备"
@@ -71,6 +78,10 @@ def connect(timeout=20.0):
     d = hello.get("d", {})
     payload = {"rpcVersion": 1}
     a = d.get("authentication")
+    if a and not PASSWORD:
+        ws.close()
+        raise RuntimeError("obs-websocket 要求认证，但未设置 OBS_WS_PASSWORD "
+                           "或 05_验证/.obs_ws_password")
     if a:
         payload["authentication"] = _auth_string(PASSWORD, a["salt"], a["challenge"])
     ws.send(json.dumps({"op": 1, "d": payload}))

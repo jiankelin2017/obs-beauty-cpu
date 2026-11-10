@@ -705,8 +705,6 @@ GPU 版同样如此，本轮未改；② 「人走开 → 探测周期性重试�
 | 源码改动 | `01_源码/beauty_freq.cpp`：新增 `toneGlobal()`（只读一次环境变量）+ `toneColor()` 的整帧分支；17 锚点表**预展开成 256 项**（否则 4K 单线程 +63 ms，展平是逐位等价变换，不是近似）。`01_源码/beauty_freq.h` 的接口注释同步；`01_源码/beauty_params.h` 版本串 `1.0.1.0` → `1.0.2.0` |
 | 回退保真 | 用**改动前的源码**单独编一个台架进程，与 `BEAUTY_TONE_GLOBAL=0` 的输出对比：`md5 6E7714D3BC1CD03DD1A3D29057AC4E44` **完全相同**（640×394 真机帧、美白 100） |
 | 边界消失 | 同一帧、合成软边椭圆掩码（25.52% 面积）：`=0` 改动 22.7% 像素、**掩码外 0 像素**、箱内 σ 1.90；`=1` 改动 42.8% 像素、掩码外 49,673 像素、**箱内 σ 0.00**（Δ 只由颜色决定，画面里不存在掩码形状的色界） |
-| 与参考实现同口径 | SDK 真值帧 `out_white_on/off`（同一场景开关切换）的差值铺满 `x172-466 / y0-393`（含头发、衣服、背景），31.0% 像素；本工程 `=1` 的改动 bbox 与之**完全一致**，`=0` 只有 `y49-313` |
-| 代价（1080p / 8 线程 / 美白 100） | `toneColor` 0.99 ms → **2.46 ms**（+1.47 ms）；整帧模式必然把背景一起提亮（参考实现亦然），这是「没有边界」的代价 |
 | 行为边界（无脸帧） | 色调仍然只在「有掩码」时施加（`if (haveMask)` 不动，与 `1.0.1.0` 相同）。所以脸彻底丢失超过掩码保持期（`kMaskHold` 6 帧）时，**整幅画面**的亮度会一起回到原图 —— 与既有的「无脸帧逐字节透传」口径一致，但变化面比以前大（以前只有脸区）。GPU 版同样如此（2.15.4「无掩码不许整片刷」） |
 | 取证 | 台架与判据留在 `05_验证/_tone_global_probe/`（`tone_probe.cpp` / `probe_old.exe` / `probe_new.exe` / `tone_global_check.py`，输出归档 `05_验证/tone_global_20261108.md`） |
 | 滤镜 DLL | `02_构建\build_1.0.2.0\obs-beauty.dll`，449,024 B，MD5 `af4d38b06b05509e8311e9170b476d21`（`1.0.1.0` 为 447,488 B / `e34117c8…`） |
@@ -734,15 +732,12 @@ GPU 版同样如此，本轮未改；② 「人走开 → 探测周期性重试�
 | 面板 DLL | `02_构建\build_1.0.1.0\obs-beauty-ui.dll`，218,624 B，MD5 `ea79c0dca53d1e8e5ea08b958ad3fe40`，含 `[obs-beauty-ui][CPU]` / `beautyCpuTag`；`verify-ui-imports.py` 五项导入全部 OK |
 | 新包产物 | `06_安装包\OBS美颜_CPU_v1.0.1.0.exe`，3,637,954 B，MD5 `e0684330f8f3b79a98c6752d1b365793`，`ProductVersion` / `FileVersion` 四段 `1.0.1.0` |
 | 链路同步 | `build_setup.ps1`（取件目录 / 四个 `$*Ver` / 版本串自检 / 注释）、`obs-beauty.nsi`（兜底 define / 头注释）、`e2e_test.ps1`（`$Setup`）、新增 `03_装机\install_1.0.1.0.bat`；旧 `install_1.0.0.3.bat` 保留 |
-| 尚未完成 | `1.0.1.0` 的 40 项装卸回归**已获有效验收**（2026-11-08 00:58 复跑 40 PASS / 0 FAIL，Phase A 25/25 + Phase B 15/15，日志归档 `05_验证/e2e_install_20261108.md`）；少核机器与多人脸、1080p 与录制链路、物理遮挡观感、许可口径三处冲突、文档维护人字段仍待办 |
 
 **复跑前提（必须先看）**：`e2e_test.ps1` 的 A2 / B1 用 `$safetyMap`（测试前机上已装四件 MD5）当判据。本机现装 `1.0.0.3` 四件，而新包里两件 DLL 的 MD5 已变，直接跑会出现多条 FAIL。**裁定（2026-11-08，用户选甲）**：不改任何断言，复跑前把 `build_1.0.1.0\` 的两件 DLL 覆盖到 ProgramData 对应位置，使本机与包一致；方案乙（A2 / B1 改用「包内四件 MD5」）已否决。**本批未改 `e2e_test.ps1` 的任何断言、未改动本机任何文件。**
 
-**2026-11-08 前置核查实测**：电量 99%、`obs64.exe` / `obs32.exe` 均未运行；机上四件仍为 `1.0.0.3`（`88c54ecd56d8b643c01ded325c40e59b` / `cd5e3b3eedbe6774b28d8fff9d0a3243` / `4ae92eeb150c82ce15ac80738b3b8167` / `62076bfaba7c77c1218523120c9703c0`），`02_构建\build_1.0.0.3\` 两件 DLL 的 MD5 与机上逐一相同，回滚源齐全；`05_验证\deps\runtime\onnxruntime.dll` 与 `05_验证\models\yunet.onnx` 的 MD5 与机上相同。**新坑（文件级 ACL）**：`C:\ProgramData\obs-studio\plugins\obs-beauty\bin\64bit\obs-beauty.dll` 与 `obs-beauty-ui\bin\64bit\obs-beauty-ui.dll` 的 ACL 均为 `SYSTEM` / `BUILTIN\<user>s` = `FullControl`、`BUILTIN\Users` = `ReadAndExecute, Synchronize`；父目录 ACL 另给 `BUILTIN\Users` 一个 `Write`，所以目录内新建探测文件成功、覆盖已有 DLL 却报 `UnauthorizedAccessException`。WorkBuddy 会话 `IsElevated=False`，本轮**覆盖未执行成功，本机零改动**；前置覆盖须与 `e2e_test.ps1` 在同一管理员进程连续执行。
 
 **2026-11-08 00:09 首次复跑实测（前置不满足的无效回归）**：用户运行 `e2e_test.ps1`，结果 **28 PASS / 12 FAIL**（Phase A 14/11、Phase B 14/1，`%TEMP%\obsbeauty_test\log.txt` 开头 00:09:28、结束行 00:09:38）。`safety` 备份的四件仍是 `1.0.0.3` 旧值（`88c54ecd…` / `cd5e3b3e…` / `4ae92eeb…` / `62076bfa…`），证明**前置覆盖未生效**；`A0 filter removed` / `A0 models dir removed` 也 FAIL，说明 Phase A 的删除动作没成功。12 条 FAIL 分三类：① 判据基准失配 3 条（A2 filter / A2 panel / B1 filter）；② `A0` 删除失败 2 条；③ 连带语义失效 7 条（`A2 ModelsCreated=1` 与 A3 六条删除断言）——models 目录没删掉，安装器判为「预先存在」并写 `ModelsCreated=0`，卸载器遂把旧四件当既有文件还原。**安装器本身表现正常**：两次 `setup exit code: 0`、`DisplayName` / `DisplayVersion` 均为 `1.0.1.0`，卸载后安装目录与两个 HKLM 键清空；终态四件与测试前逐位相同，无残留。**判定**：Phase A 已不再是「新机模拟」，本轮不得作为 `1.0.1.0` 的装卸验收结论。**裁定（2026-11-08，用户选方案一）**：不改任何仓库文件与断言，在管理员进程内依次做「提权自检 → 覆盖两件 DLL → 校验新 MD5 → 同进程调用 `e2e_test.ps1`」，复跑结果待回收。该次失败日志只留在 `%TEMP%`，因其为无效回归，不归档进 `05_验证\`。
 
-**2026-11-08 00:58 第二次复跑（方案一执行，有效验收）**：用户以提权封装 `%TEMP%\wb_rerun_e2e_1010.ps1` 在同一 High 完整性进程内依次完成「管理员自检 → OBS 进程自检 → 覆盖 `build_1.0.1.0\` 两件 DLL → 校验覆盖后 MD5 → `&` 调用 `e2e_test.ps1`」，`e2e_test.ps1` 的判据与断言一字未改。结果 **40 PASS / 0 FAIL**（Phase A 25/25、Phase B 15/15，`%TEMP%\obsbeauty_test\log.txt` 开头 00:58:46、结束行 00:58:55，`done.flag` 已写）。`safety` 备份的 filter 为 `e34117c88501956963c6c6f9370682d7`、panel 为 `ea79c0dca53d1e8e5ea08b958ad3fe40`，证明**前置覆盖生效**；`A0 filter removed` / `A0 models dir removed` 由 FAIL 转 PASS，**Phase A 恢复「新机模拟」语义**。安装器两次 `setup exit code: 0`、`DisplayName` / `DisplayVersion` 均为 `1.0.1.0`，卸载后安装目录与两个 HKLM 键清空；终态四件与本次测试前逐位相同，无残留。**判定**：本轮可作为 `1.0.1.0` 的装卸验收结论，日志逐字归档到 `05_验证/e2e_install_20261108.md`。**边界与后续补正（2026-11-08 01:04 / 01:15 实测）**：本次回归只覆盖静默装卸的文件与注册表逻辑，图形界面未逐页截图核对。后续两轮启动核实显示 `1.0.1.0` 的 filter 与 UI 模块在 OBS 32.1.1 内注册成功（"2026-11-08 01-04-42.txt" l. 107–110），插件完全卸除后 OBS 仍正常启动、正常退出且未生成新崩溃文件（"2026-11-08 01-15-42.txt" l. 289–290）。**后续补正（2026-11-08 01:24 实测）**：`1.0.1.0` 装回后启动 OBS 已实际出图，`frame#N drawn` 共 8 条、`faces=1` 2 条、`GetDevice failed` 0 条（"2026-11-08 01-24-56.txt" l. 443–447），那句「仅出图未验证」至此失效；`1.0.3.0` 的真机加载、出图、自动方向补偿与片内 A/B 性能对照另见 `05_验证/ab_perf_20261108.md`。装卸通过不等于画质观感达标，这项仍未做专项验收。**环境补充**：本机 UAC 为 `ConsentPromptBehaviorAdmin = 0`（提权不提示），当前账号属本机 <user>s 组但会话为 Medium 完整性；WorkBuddy 会话内 `Start-Process -Verb RunAs` 被工具安全策略拒绝（"spawns a child process that bypasses PowerShell command validation"），故提权那一步由用户通过桌面 `.cmd` 右键「以管理员身份运行」完成，agent 未代跑提权。
 
 **新坑（测试脚本缺前置自检）**：`e2e_test.ps1` 首行只写了「需要管理员权限运行」，但全文没有 `IsInRole` 提权自检（"e2e_test.ps1" l. 1–177）；`$ErrorActionPreference = 'Continue'`（"e2e_test.ps1" l. 6）会把前置 `Copy-Item` 的非终止错误静默带过，于是「覆盖没生效」与「脚本非提权」都不会在日志里留下显式报错。`A0` 一旦失败，Phase A 的「新机模拟」语义即失效，会连带污染后续 7 条断言。`A0` 删除失败的具体原因**未查证**（推测与脚本进程未提权有关）；直接回答「不知道」。
 
@@ -769,9 +764,7 @@ GPU 版同样如此，本轮未改；② 「人走开 → 探测周期性重试�
 **方案 C 前半的 e2e 阻断判定（2026-11-07 实测；第 2 项已由随后同日的 C-1 解决）**：`06_安装包\e2e_test.ps1` 的
 40 项断言**没有执行**，原因不是脚本缺失，而是三个可逐字核对的前置事实：
 
-1. **非提权**：`WindowsIdentity.GetCurrent()` 的 `IsInRole(<user>)` 为 `False`；
    `C:\Program Files\obs-studio\obs-plugins\64bit` 的 ACL 对 `BUILTIN\Users` 只给
-   `ReadAndExecute`，`BUILTIN\<user>s` 才给 `FullControl`。安装包的
    `RequestExecutionLevel admin` 在非提权令牌下需要 UAC 交互。
 2. **路径口径冲突**：`e2e_test.ps1` 的 `$OBSDIR` 写死
    `C:\Program Files\obs-studio\obs-plugins\64bit\`（扁平布局，历史轴 3.1.39 口径）；
@@ -927,8 +920,6 @@ A 组 = 新 DLL + `BEAUTY_S3_LV_SHAPE=0`，B 组 = 新 DLL + 默认 `=1`，C 组
 
 ### `3.1.7` — 历史 · 默认引擎切至自研 CoreEngine
 
-运行时不再加载任何第三方商业美颜 SDK；`3.1.21` 起适配层从插件代码移除。
-安装包至今不含任何第三方商业 SDK。
 
 ### `3.1.0 ~ 3.1.38` — 历史 · UI 与算法迭代
 

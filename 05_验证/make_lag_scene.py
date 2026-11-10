@@ -3,7 +3,7 @@
 
 场景内容：
   * 一个 640x394 的 Browser 源，加载 move.html —— 里面的人脸以 4px/帧
-    左右往返运动（30fps 下约 120 px/s，接近真人头部晃动速度）
+    左右往返运动（30fps 下约 120 px/s，接近头部晃动速度）
   * 挂 LegacySDK Beauty 滤镜，只开美白 55，磨皮/锐化/红润全关
     → 画面上唯一会变的就是美白区域，它的位置就是掩码的位置
 
@@ -13,7 +13,7 @@ import json
 import os
 import uuid
 
-SCENE_DIR = r"C:\Users\<user>\AppData\Roaming\obs-studio\basic\scenes"
+SCENE_DIR = os.path.join(os.path.expanduser("~"), "AppData/Roaming/obs-studio/basic/scenes")
 OUT = os.path.join(SCENE_DIR, "lagtest.json")
 
 HTML = "file:///C:/legacy_e2e/obs_move/move.html"

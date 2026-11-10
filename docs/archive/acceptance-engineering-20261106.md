@@ -175,7 +175,6 @@ h=456
 ## 八、复跑清单
 
 ```powershell
-$py = 'C:\Users\<user>\AppData\Local\Programs\Python\Python312\python.exe'
 $root = 'D:\插件\OBS美颜'
 
 # 1) 装机三路（PowerShell）

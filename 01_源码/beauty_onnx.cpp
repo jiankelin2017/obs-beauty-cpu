@@ -1,6 +1,4 @@
-// beauty_onnx.cpp —— ONNX Runtime C API 的最小封装实现
 //
-// 只依赖 onnxruntime_c_api.h（纯 C 接口）。所有句柄以 void* 保存，避免把头文件
 // 的 C 类型泄漏到项目其它地方。
 
 #include "beauty_onnx.h"
@@ -29,13 +27,10 @@ void onnxSetRuntimeDir(const char* dir) {
 }
 
 namespace {
-// 动态加载 ONNX Runtime。
 //
 // 为什么不用导入库硬链接：那会让 obs-beauty.dll 在**加载阶段**就依赖
-// onnxruntime.dll —— 用户少装一个文件，整个滤镜就加载失败。动态加载后最坏
 // 情况只是「自研引擎降级」，默认的 core 路径完全不受影响。
 //
-// 也正因为如此，编译时**不链接** onnxruntime.lib（见 build_manual.bat）。
 const OrtApi* api() {
     static const OrtApi* a = nullptr;
     static bool tried = false;
@@ -43,7 +38,6 @@ const OrtApi* api() {
     tried = true;
 
     // 优先按「调用方给的目录」用完整路径加载，避免抓到系统里另一个版本的
-    // onnxruntime.dll（本机就有一个 1.17.1 在 PATH 中，版本不匹配时
     // GetApi 会静默返回 nullptr）。
     HMODULE h = nullptr;
     if (!g_ortDir.empty()) {
@@ -193,7 +187,6 @@ bool OnnxModel::load(const char* path, std::string& err, int threads) {
         return false;
     }
 
-    // 输入：只支持单输入模型（YuNet 就是单输入）
     // 2026-11-10 代码审查 #3：调用失败与「成功但空名」必须分开处理。
     // 失败时 *inName 的写入语义由 ORT 决定（待人工确认），不由本 allocator Free；
     // 成功时空名/正常名都是 ORT 经同一 allocator 分配的，按原路径释放。

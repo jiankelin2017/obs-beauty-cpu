@@ -53,7 +53,6 @@
 
 ```cpp
 // legacy_engine.cpp:1967
-// 参考实现自带美白恒关：实测 color_level 是整帧提亮（人脸 11.25 /
 // 背景 11.17 无差别，没人脸的照片也 96% 被改），没有任何参数能
 // 把它限到人脸。美白改由 applyWhiten 按肤色掩码在 CPU 侧完成。
 sehSetParamd(item, "color_level", 0.0);
@@ -137,7 +136,6 @@ chg 0.322 vs 0.338（−4.7%），rmse 1.39，corr 0.768，Δ亮度 +0.32 / +0.3
 原因在 `beauty_core.cpp:1300`：
 
 ```cpp
-// 脸内锐化以「磨皮开启」为前提，这一条与参考实现路线完全一致
 const bool wantFaceDetail = (t > 0.0f) && (shFace > 0.0f);
 ```
 
@@ -228,7 +226,6 @@ SDK 是「铺满整脸的极低幅度明暗重塑」（README §5.1 实测：支
 ## 七、复跑
 
 ```powershell
-$py = 'C:\Users\<user>\AppData\Local\Programs\Python\Python312\python.exe'
 cd 'D:\插件\OBS美颜\06_离线验证\全项对齐_20261030'
 $env:GOLDEN_ENGINE_DIR='C:/btwork/engine'      # 加密 bundle（产品行为）
 

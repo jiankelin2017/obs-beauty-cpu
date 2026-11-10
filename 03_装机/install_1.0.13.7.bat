@@ -10,7 +10,6 @@ rem              Reproduced in the async path (face_src 3 deg per frame, all
 rem              three warp sliders at 100, measuring mean|out-in|):
 rem                f16 48 deg meanD 0.98   f17 51 deg 1.16   f18 54 deg 1.61
 rem              -> +39% in one frame. Two things change at once: phi jumps
-rem              from ~0 (YuNet collapses the keypoints on a 45 deg face) to
 rem              the real 45.7 deg, and fw/fh jumps from the AABB to the tight
 rem              box (108x116 -> 107x142).
 rem              Fix: a 6-frame geometry transition. startGeoFade() stores the
@@ -35,7 +34,6 @@ rem    2) copy obs-beauty.dll      -> ...\plugins\obs-beauty\bin\64bit\
 rem       copy obs-beauty-ui.dll   -> ...\plugins\obs-beauty-ui\bin\64bit\
 rem    3) print MD5 of both, so the caller can confirm which build is live
 rem
-rem  Only two files change. onnxruntime.dll and models\yunet.onnx stay as-is.
 rem  Keep this file PURE ASCII + CRLF: cmd.exe reads .bat as GBK.
 rem ===========================================================================
 setlocal enabledelayedexpansion

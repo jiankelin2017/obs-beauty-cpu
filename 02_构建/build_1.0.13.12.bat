@@ -13,7 +13,6 @@ rem  update() takes the exclusive lock for the whole write + dirty flag;
 rem  render() takes one beauty_param_snapshot per frame under the same lock,
 rem  consumes dirty in that critical section, and uses only the local copy.
 rem
-rem  D2 (beauty_onnx.cpp): CreateSessionOptions and
 rem  GetAllocatorWithDefaultOptions returned OrtStatus* that was ignored, and
 rem  alloc was used without a null check. Now both status values are handled,
 rem  opts/alloc/inName are checked, and failures write err (existing fallback).

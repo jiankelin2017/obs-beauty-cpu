@@ -5,7 +5,6 @@
 // 目的：把「谁来做美颜」从 OBS 胶水层里解耦出去。
 //
 //   obs-beauty.cpp  ──>  IBeautyEngine  ──>  CoreEngine        （默认：自研）
-//                                       └─>  LegacyAdapter       （回退：参考实现驱动，仅离线基准）
 //                                       └─>  PassthroughEngine （验证用直通）
 //
 // 接口严格按 LegacyEngine 的现有用法设计（RGBA 进 / RGBA 出 + BeautySettings +
@@ -102,16 +101,13 @@ void beautyCoreSetSmoothParams(int radius, float sigmaSpace,
 void beautyCoreSetPerf(int threads, int useRoi);
 
 // Sobel 边缘门控灵敏度（仅供离线调参）。0 = 关闭。
-// 灵敏度系数取自 wuxiwuhen/obs-beauty-filter（MIT）的 PSComposite，原值 ×10.0。
 // 门控会在「亮度梯度大」的地方（眉毛、眼镜框、发际线）取消磨皮。
 void beautyCoreSetEdgeK(int k);
 
 // 五官保护强度 0..100（仅供离线调参）。0 = 关闭。
-// 眼睛和嘴巴上的磨皮会乘 (1 - protect × k/100)，做法同 lumina 的 uSmoothProtect。
 void beautyCoreSetProtectK(int k);
 
 // 阈值软膝（立体感）0..255，0 = 关闭。|src-smoothed| 超过它会按比例减少磨皮，
-// 从而保住鼻梁侧、下颌线这类大幅度的明暗过渡。做法同 lumina 的 uSmoothThreshold。
 void beautyCoreSetLimitThr(int thr);
 
 // 磨皮算法切换（离线 A/B 用）：
@@ -183,8 +179,6 @@ int beautyCoreAlphaInEngine();
 
 // 掩码导出（仅供离线对拍）
 //
-// 为什么要这个：自研引擎只磨「肤色 ∩ 人脸框」那 5% 左右，而 参考实现的改动区有
-// 13%（含脖子/肩）。拿参考实现改动区当分母去算细节保留率，会把「只磨了脸」读成
 // 「几乎没磨」（保留率 99%）。对拍的分母必须是**自研掩码本身**。
 //
 // src   RGBA8（w*h*4），会被强制重算一次掩码（不吃缓存）

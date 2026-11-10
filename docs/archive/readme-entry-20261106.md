@@ -8,7 +8,6 @@
 
 # OBS美颜 · 仓库说明（源码 v3.1.40 / CoreEngine 1.4.1；线上定稿 v3.1.39 / core 1.4.0）
 
-给 **OBS Studio 32.1.1** 写的**美颜滤镜插件**。纯 CPU 自研引擎 **CoreEngine**，运行时不加载任何第三方美颜 SDK。
 
 > **本文是仓库入口说明**，只讲「是什么 / 怎么装 / 依赖谁 / 去哪看细节」。
 > 项目完整总文档（架构、评分、验收、雷区、版本史）在**根目录 `README.md`**，两者冲突时以根 `README.md` 为准。
@@ -17,12 +16,7 @@
 
 ## 1. 声明
 
-1. **个人学习、研究与本地自用**，不构成对外许可，不得商用或再分发。
-2. **运行时不依赖任何第三方商业 SDK。**
-   3.1.7 起默认引擎已切到 CoreEngine；3.1.21 起参考实现驱动适配层（`LegacyAdapter`）已从插件代码移除，
-   插件编译单元里不再出现任何第三方 SDK 二进制名。
    本机实测：装机目录下没有对应 SDK 子目录时，滤镜仍能正常 `init`（`engine=core/1.4.0`）。
-3. 第三方开源组件的版权归各自原作者，许可清单见 §9。
 
 ---
 
@@ -54,7 +48,6 @@ OBS Studio 32.1.1
 └─ 视频源（摄像头 / 采集卡）
    └─ 滤镜链
       └─ obs-beauty.dll  ·  obs_beauty_filter
-         └─ CoreEngine 1.4.0（纯 CPU，不加载任何第三方 SDK）
             ├─ YuNet 人脸检测（ONNX Runtime）
             ├─ 肤色掩码 / 区域椭圆 / 5 关键点
             ├─ 保边平滑 + 高低频分离 + 细节回填
@@ -81,15 +74,11 @@ obs-beauty-ui.dll  ·  顶层菜单「美颜(&A)」
 | `03_装机\` | 装机 / 卸载脚本（22 份历史 + 3.1.39 定稿 + 3.1.40 备好未执行）+ 回滚备份 | 7.0 MB | ★★ |
 | `04_文档\` | 35 份分主题文档（C1~C21、S1~S3、D1、CHANGELOG、验收报告） | 0.6 MB | ★★ 按需查 |
 | `05_验证\` | 离线验证台架：268 个脚本 + goldens 真值 + 全项对齐数据 | 5.1 GB | ★★ 复算时用 |
-| `参考文件\01_参考分析\` | 参考实现的对照材料（**不入库**，仅本机保留） | 1.4 GB | ★ 参考 |
 | `参考文件\03_依赖与SDK_OBS\` | OBS 32.1.1 源码树 + obs-sdk + ONNX Runtime 运行时 | 151 MB | ★★★ 重编译前提 |
 | `06_安装包\` | NSIS 打包脚本 `obs-beauty.nsi` | 60 KB | ★ |
-| `07_开源参考\` | MIT 许可证原文（wuxiwuhen beauty_filter） | 4.8 KB | ★ 合规 |
 
 > 旧文档里出现的 `D:\插件\OBS美颜\...` 路径需按根 `README.md` §〇 的换算表迁移。
 
-> **另有 5 份文档只留本机、不进入公开仓库**（含参考实现内部细节）：
-> `01_第三方磨皮真值.md`、`C23_磨皮照抄施工图.md`、`一级入口说明.md`、`美颜子功能开发指南.md`、`C13_装机链路.md`。
 
 ---
 
@@ -127,7 +116,6 @@ build-ui_320.bat      :: 编译 obs-beauty-ui.dll（面板）
 名字对不上会**静默跳过且不写日志** —— 表现就是「像没装」。
 
 卸载：`03_装机\OBS美颜插件卸载.bat`。回滚件在 `03_装机\backup_install_20261030\`。
-单文件安装包由 `06_安装包\obs-beauty.nsi`（NSIS 3 / Unicode）打包，内含 4 个文件 + 卸载器，**不含任何第三方商业 SDK**。
 
 **装完自查**：两个 DLL md5 == §2 表 → 日志有 `init OK (v3.1.39, engine=core/1.4.0, region=on(every=0)…)`
 → 日志有 `faces=1` 且无 `core engine has NO face mask` 警告 → 面板左下角显示 `v3.1.39` 且无「（面板 x.x.x）」括注。
@@ -165,28 +153,15 @@ build-ui_320.bat      :: 编译 obs-beauty-ui.dll（面板）
 
 ---
 
-## 9. 依赖与授权
 
 ### 9.1 链接 / 打包进安装包的
 
-| 组件 | 出处 | 许可 | 说明 |
 |---|---|---|---|
-| OBS Studio 32.1.1 libobs | obsproject/obs-studio | **GPLv2** | 插件动态链接 libobs，源码树在 `参考文件\03_依赖与SDK_OBS\` |
-| ONNX Runtime | microsoft/onnxruntime | **MIT** | `onnxruntime.dll` 11.5 MB，须与滤镜 DLL 同目录 |
-| YuNet 2023mar | opencv/opencv_zoo | **MIT** | `models\yunet.onnx` 232 KB，须落在 `models\` 子目录 |
 
 ### 9.2 借鉴算法思路的（代码注释中已标注出处）
 
-| 仓库 | 许可 | 借鉴内容 |
 |---|---|---|
-| **dinjufen/lumina-beauty** | 核心 SDK **MIT** / 插件层 GPL-2.0 | 颜色差减大半径模糊、`uSmoothProtect` 五官保护、`uSmoothThreshold` 阈值软膝、`smoothGrain` 颗粒回填、clarity 中频回填、分尺度 |
-| **wuxiwuhen/obs-beauty-filter** | **MIT** | Sobel 边缘门控 ×10.0、5-tap 级联两轮等效 σ12、`smoothstep/lerp` 不在 OBS 内置表的坑 |
-| **wtnl-zhi/obs-beauty-filter** | GPL-2.0 | `mask_feather` 12% + smoothstep（已采用）、异步检测双 staging（已采用）、`face_tracker` EMA（明确拒绝） |
-| **iesv/OBS-Beauty** | GPL-2.0 | 只读功能清单 |
-| **vanawaker/BetterFaceOBS** | GPL-2.0 + Apple Vision | 判定无用，未采用 |
 
-> **红线**：GPL-2.0 的三个仓库**只读思路、不抄任何一行代码**。抄了会让整个 `obs-beauty.dll` 被迫 GPL。
-> `07_开源参考\` 只存 MIT 原文，GPL 仓库只记结论不存代码。
 
 ### 9.3 不随包分发的
 
@@ -196,12 +171,10 @@ build-ui_320.bat      :: 编译 obs-beauty-ui.dll（面板）
 
 | 路径 | 内容 | 体积 |
 |---|---|---|
-| `参考文件\03_依赖与SDK_OBS\installer-stage\` | 第三方商业 SDK 二进制、授权包与道具资源 | 约 77 MB |
 | `参考文件\01_参考分析\` | 对照材料与测量记录 | 1.4 GB |
 | `05_验证\models\pphumanseg_2023mar.onnx` | PaddleSeg（Apache-2.0），实测 IoU 0.261 已弃用，仅留作记录 | 5.9 MB |
 
 > ⚠️ **对外发布或移交前确认 `参考文件\` 整目录不在提交范围内**（`.gitignore` 已覆盖），
-> 否则等于分发未授权的商业件。
 
 ---
 
@@ -214,7 +187,6 @@ build-ui_320.bat      :: 编译 obs-beauty-ui.dll（面板）
 | ① 权威总文档 | **根 `README.md`**（681 行，结项归档版） | 只读 §一 §二 §五 就能掌握全局 |
 | ② 现状级分册 | `04_文档\CHANGELOG_提交记录.md`、`复刻评分_v3.1.39.md`、`验收报告_v3.1.39.md` | 查版本改动 / 评分口径 / 验收项 |
 | ③ 技术细节 | `04_文档\C1~C21`（按主题）、`S1~S3`（结论）、`D1`（自研线路） | 按需查，别当现状 |
-| ④ 开源溯源 | `04_文档\开源参考仓库_对照与可复用清单.md`、`方案边界调整_开源可商用.md` | §9 的出处 |
 
 ---
 

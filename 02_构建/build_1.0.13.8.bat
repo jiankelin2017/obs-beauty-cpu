@@ -22,7 +22,6 @@ rem    f16 48 deg  roll=  0  phi=+0.88  box 108x113  meanD 0.98
 rem    f17 51 deg  roll=  0  phi=-6.28  box 116x119  meanD 1.16   52.2 ms
 rem    f18 54 deg  roll=-45  phi=+45.72 box 179x179  meanD 1.61  <- +39% in one frame
 rem  Two things change at once:
-rem    . phi jumps from ~0 (YuNet's five keypoints collapse into a horizontal
 rem      line on a 45 deg face) to the real 45.7 deg -> the warp direction
 rem      turns 45 deg;
 rem    . fw/fh jumps from the detection box (an axis-aligned AABB when roll==0)

@@ -16,7 +16,6 @@
 `obs-beauty\bin\64bit` 目录的 ACL 是
 
 ```
-BUILTIN\<user>s:(I)(OI)(CI)(F)
 BUILTIN\Users:(I)(OI)(CI)(RX)
 BUILTIN\Users:(I)(CI)(WD,AD,WEA,WA)
 ```
@@ -140,7 +139,6 @@ python 05_验证/obs_ctl.py record 150
 python 05_验证/obs_ctl.py quit              # 发 WM_CLOSE，日志与 mp4 都正常收尾
 ```
 
-`obs_ctl.py` 是这一轮新增的：obs-websocket 5.x（端口 4455，密码在
 `plugin_config/obs-websocket/config.json`）驱动，用来代替手点 GUI。
 注意两条：连接前必须清掉 `HTTP_PROXY`；OBS 必须以后台常驻方式启动。
 

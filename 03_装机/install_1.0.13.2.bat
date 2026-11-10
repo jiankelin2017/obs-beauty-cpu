@@ -20,7 +20,6 @@ rem    2) copy obs-beauty.dll      -> ...\plugins\obs-beauty\bin\64bit\
 rem       copy obs-beauty-ui.dll   -> ...\plugins\obs-beauty-ui\bin\64bit\
 rem    3) print MD5 of both, so the caller can confirm which build is live
 rem
-rem  Only two files change. onnxruntime.dll and models\yunet.onnx stay as-is.
 rem  Keep this file PURE ASCII + CRLF: cmd.exe reads .bat as GBK.
 rem ===========================================================================
 setlocal enabledelayedexpansion

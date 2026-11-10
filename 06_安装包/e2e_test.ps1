@@ -56,7 +56,6 @@ function Wait-RegGone($path, $sec) {
 
 # 2026-11-09：卸载器的文件删除是异步的 —— 它先删文件、最后删注册表，
 # 但 Delete 失败不会报错也不会重试。原脚本等注册表一消失就硬睡 1.2 秒再断言，
-# 刚写入的 DLL（onnxruntime 11.5 MB）可能还被实时扫描持有，于是断言全 FAIL。
 # 改成轮询：只放宽时间窗口，不改变「最终有没有删掉」的判定。
 function Wait-PathGone($path, $sec) {
     $end = (Get-Date).AddSeconds($sec)

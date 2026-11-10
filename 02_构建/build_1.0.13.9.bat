@@ -5,7 +5,6 @@ rem  1.0.13.9 = "roll never lets go".
 rem  1.0.13.8 fixed the flash (mask alignment). This version fixes the older
 rem  1.0.5.0 defect: after tilting past 45 deg and straightening up, effRoll
 rem  stayed at -45 forever. The only exit was "detect fails at the locked
-rem  angle", but YuNet still returns a box at -45 on an upright face, so
 rem  detOk and plausOk are both true and neither exit ever fires.
 rem    upright, roll -45 : phi +42.59, box 192x192, meanD 1.60  (loose box)
 rem    upright, roll   0 : phi  +5.84, box 108x134, meanD 1.28  (tight box)
@@ -35,7 +34,6 @@ rem    f16 48 deg  roll=  0  phi=+0.88  box 108x113  meanD 0.98
 rem    f17 51 deg  roll=  0  phi=-6.28  box 116x119  meanD 1.16   52.2 ms
 rem    f18 54 deg  roll=-45  phi=+45.72 box 179x179  meanD 1.61  <- +39% in one frame
 rem  Two things change at once:
-rem    . phi jumps from ~0 (YuNet's five keypoints collapse into a horizontal
 rem      line on a 45 deg face) to the real 45.7 deg -> the warp direction
 rem      turns 45 deg;
 rem    . fw/fh jumps from the detection box (an axis-aligned AABB when roll==0)

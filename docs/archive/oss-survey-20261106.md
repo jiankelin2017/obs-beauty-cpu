@@ -1,25 +1,18 @@
-> **ARCHIVED · 已废弃，见 `docs/reference/reference-licensing.md`（许可部分）；§7 / §8 差异点待第 4 批并入 `docs/design/design-*.md`**
+> **ARCHIVED · 已废弃，见 `docs/CHANGELOG.md`；来源段落已于 2026-11-10 移除**
 > 归档日期：2026-11-06 · 状态：`Deprecated` · 适用代码版本：历史轴 `3.1.x / core 1.4.x`（**非当前 CPU `1.0.0.0`**）
-> 废弃原因：本文是混合文档。§0–3、§5 以「GPU 化」为论证目标（椭圆 mask 去全帧往返、staging 开销推算、P1/P4 建议顺序），与当前**纯 CPU、不依赖 GPU**方向冲突；§4 称「插件闭源分发」，与根 `README.md` §0 的 GPL-2.0 口径矛盾（待人工确认）；`09_开源参考/`、`06_离线验证/` 等引用路径已不存在，按本文操作得不到正确结果。
 > **仍有价值、待第 4 批引用的差异点**：§7.7 实测修正（「双边颜色差减大半径差」「uint8→float」两项均无收益、已改回原路线）、§7.2 分分辨率做法、§8.4「不做人脸框 EMA / 不换贴脸椭圆 / 不做运动预测」的取舍结论。引用时**不得把 GPU 化论证一并带入**。
 > 本文为历史原件，正文未改写、未删减，**不得据此施工**。
 > 维护人：待人工确认 · 最后核对：2026-11-06
 
 ---
 
-# 开源参考仓库 · 对照与可复用清单
 
 > 2026-10-28 · 五个仓库已逐个核实。**核心结论：只有 2 个能抄代码，3 个只能读思路。**
 
 ## 0. 三条结论
 
-1. **许可证是分水岭**：`lumina-beauty` 的核心 SDK 和 `wuxiwuhen/obs-beauty-filter` 是 **MIT**，
-   可以直接借鉴代码；另外三个是 **GPL-2.0**，抄了我们的闭源插件就得跟着开源。
 
-2. **`wuxiwuhen` 的 158 行 effect 是最直接的可用资产** —— 频率分离 + 肤色窗 + Sobel 边缘门控，
-   参数全部写死在文件里，已归档到 `09_开源参考/MIT_wuxiwuhen_beauty_filter.effect.txt`。
 
-3. **比算法更值钱的是架构洞察**：三个成熟实现（lumina / wtnl-zhi / wuxiwuhen）**没有一个回读全帧**。
    它们用「椭圆 mask」替代「逐像素肤色分割」，从而让磨皮全程留在 GPU 上。
    我们现在每帧搬 8 MB（1080p RGBA）上下各一次 —— 这笔开销至今没测过，可能比磨皮本身还贵。
 
@@ -27,25 +20,15 @@
 
 ## 1. 五个仓库定位对照
 
-| 仓库 | 许可 | 技术路线 | 平台 | 对我们的价值 |
 |---|---|---|---|---|
-| **dinjufen/lumina-beauty** | 核心 SDK **MIT**<br>OBS 插件层 GPL-2.0<br>模型 Apache-2.0 | OpenGL 3.3 离屏上下文<br>MediaPipe ONNX 在 CPU 推理 | Win + Mac | ⭐⭐ **架构范本**，核心算法可抄 |
-| **wuxiwuhen/obs-beauty-filter** | **MIT** | Lua + `effect`，5 个 pass 纯 GPU，零编译 | 全平台 | ⭐⭐⭐ **算法可直接落地** |
-| wtnl-zhi/obs-beauty-filter | GPL-2.0 | gs_effect + MediaPipe + 异步工作线程 | Win x64 / Mac arm64 | 读思路（异步架构） |
-| iesv/OBS-Beauty | GPL-2.0 | 双尺度磨皮（未公开算法细节） | Win x64 / Mac arm64 | 读思路（功能清单） |
-| vanawaker/BetterFaceOBS | GPL-2.0 + Apple Vision | 只用 Apple 框架 | **仅 Apple Silicon** | 对我们无用 |
 
-**一个值得学的分层做法**（lumina）：
-核心引擎 `src/engine/` 用 MIT，OBS 插件 `plugins/obs/` 用 GPL —— 因为插件链接 libobs 才受 GPL 约束，
 核心库本身不链接，可以闭源商用。这正是我们方案 v1 里想做但没写清楚的分层。
 
 ---
 
 ## 2. 可直接落地的三项
 
-### 2.1 频率分离替代双边滤波（MIT，代码可直接抄）
 
-`wuxiwuhen` 的做法是 5 个 pass：
 
 ```
 输入 ──► BlurH1 ──► BlurV1 ──► BlurH2 ──► BlurV2 ──┐
@@ -104,9 +87,6 @@ out   = low + high * (1 - atten)
 
 | 项目 | mask 怎么来 | 检测怎么跑 | 结果 |
 |---|---|---|---|
-| wtnl-zhi | **脸部椭圆轮廓**，保护眼睛/嘴部；"**不是像素级皮肤分割**" | 双 staging + 有界工作线程，**只保留最新帧**，渲染端不等 | 渲染线程永不阻塞 |
-| wuxiwuhen | 纯 YCbCr 肤色窗（shader 内算，零检测） | 不检测 | 零 CPU 往返 |
-| lumina | 人像分割模型，掩码边缘细化 | MediaPipe ONNX（CPU），独立线程 | 引擎自己管 GL 上下文 |
 
 **关键洞察**：椭圆 mask 只需要**几个 float 参数**（中心、长短轴、旋转角），
 从检测结果算出来，然后作为 uniform 传给 shader，在片元里解析判断即可 ——
@@ -127,7 +107,6 @@ out   = low + high * (1 - atten)
 ```
 
 代价：mask 从「像素级肤色分割」退化成「椭圆近似」，边界不如现在精确
-（我们当前的掩码 IoU 0.844）。但 wtnl-zhi 明确选了这条路，并说这就是 v1 的取舍。
 
 > ⚠️ **已实测：纯椭圆在我们的素材上画质不达标，暂不采用。**
 > 系数照抄 `radius_x = 脸宽×0.57 / radius_y = 脸高×0.55`，与现有掩码对拍：
@@ -139,7 +118,6 @@ out   = low + high * (1 - atten)
 
 ### 2.3 质量分档（思路，值得抄）
 
-wtnl-zhi 给了三档现成数字：
 
 | 档位 | 检测输入 | 检测频率 |
 |---|---|---|
@@ -167,7 +145,6 @@ D3D11 的 staging map 是**同步**的（要等 GPU 把这一帧画完），1080
 如果实测确认这个量级，那么：
 
 - CPU 路线总开销 ≈ 3(下载) + 4.88(磨皮) + 1(上传) ≈ **9 ms**
-- GPU 路线（wuxiwuhen 方案）≈ **0.5 ms**，差 **18 倍**
 
 **所以 GPU 化真正的收益不是「省 4.88ms 磨皮」，而是「砍掉每帧 16MB 的往返」。**
 这一点在上一轮评估 GPU 时被我漏掉了 —— 当时只比较了磨皮核的耗时。
@@ -178,19 +155,13 @@ D3D11 的 staging map 是**同步**的（要等 GPU 把这一帧画完），1080
 
 ---
 
-## 4. 许可证红线（必须守住）
 
 | 仓库 | 能做什么 | 不能做什么 |
 |---|---|---|
-| **wuxiwuhen（MIT）** | 抄代码、改、闭源分发 | 删掉版权声明 |
-| **lumina 核心 SDK（MIT）** | 抄 `src/engine/` 的算法 | 抄 `plugins/obs/` 的代码（GPL） |
-| wtnl-zhi / iesv / BetterFace（GPL-2.0） | **读思路**、看参数取值 | **抄任何一行代码**（会让整个插件被迫 GPL） |
 | MediaPipe 模型（Apache-2.0） | 用、改、闭源分发 | 声称是自研 |
 
-我们的插件是闭源分发的（有 NSIS 安装包）。**GPL 代码一旦进来，整个 `obs-beauty.dll` 都要开源。**
 这条要写进交接文档，避免下一个人图省事直接 copy。
 
-`09_开源参考/` 目录只放 MIT 的原文，GPL 的仓库只记结论不存代码。
 
 ---
 
@@ -199,7 +170,6 @@ D3D11 的 staging map 是**同步**的（要等 GPU 把这一帧画完），1080
 | 优先级 | 做什么 | 依据 | 代价 |
 |---|---|---|---|
 | **P1** | **实测 staging 往返开销** | 决定后面所有路线；只需在 `video_render` 里加两行计时 | 半小时 |
-| **P2** | 用频率分离重写保边核（CPU 版先做） | MIT 算法，画质可对拍；比双边便宜且参数直观 | 1~2 天 |
 | **P3** | 检测改异步（双 staging + 只保留最新帧） | 去掉「含检测帧 14.34ms」这个尖峰，均摊 7.25 → 4.88 | 2~3 天 |
 | **P4** | 若 P1 确认往返 >5ms，再评估整体 GPU 化 | 5 个 pass 的 effect 已经躺在那了 | 视规模 |
 
@@ -214,17 +184,13 @@ D3D11 的 staging map 是**同步**的（要等 GPU 把这一帧画完），1080
 ## 6. 事实 vs 推测
 
 **已核实**：
-- 五个仓库的许可证、技术路线、平台支持（来自各自 README 与 LICENSE）
-- `wuxiwuhen` 的 effect 全文 158 行、全部算法参数（原文已归档）
 - `smoothstep`/`lerp` 不在 OBS effect 内置函数表（作者在文件头注明）
-- wtnl-zhi 的三档质量参数、双 staging 异步架构、椭圆 mask 的定位
 - 我们现在每帧走 `stagesurface_map` 回读（`obs-beauty.cpp` 注释与代码）
 
 **未实测（推测）**：
 - staging map 1080p 的 3~6 ms —— 这是按 D3D11 常见量级估的，**本机没测**
 - GPU 方案 0.5 ms —— 同样是估的
 - 「频率分离能追平双边滤波的观感」—— 算法不同，必须用 golden 对拍才知道
-- 「椭圆 mask 的观感退化可接受」—— wtnl-zhi 这么做了，但那是他们的判断，不是我们的实测
 
 ---
 
@@ -237,7 +203,6 @@ D3D11 的 staging map 是**同步**的（要等 GPU 把这一帧画完），1080
 **没有一个仓库在 CPU 上做磨皮，也没有一个仓库拿引导滤波当磨皮低频。**
 他们的解法是「不在全分辨率上做这件事」，而不是「把同一件事算得更快」。
 
-### 7.2 lumina 的真实分三级分辨率（源码 `LmPipeline.cpp`）
 
 | 步骤 | 运行分辨率 | 核 | 源码位置 |
 |---|---|---|---|
@@ -275,7 +240,6 @@ float weight = spatial * exp(-dot(diff, diff) * uEdge);
 另外它是 **RGBA16F** 做中间缓冲，我们迭代路径的 `lowBuf` 是 **uint8**：每轮迭代量化一次，
 4 轮下来必然出色带/平台。这也可能是阶梯效应的另一半来源。
 
-### 7.4 wuxiwuhen 的做法：不做大核，级联小核
 
 `PSBlurH/V` 只有 5 个采样点，但同一份 shader 跑两轮（`BlurH1/V1` + `BlurH2/V2`）：
 
@@ -290,7 +254,6 @@ float weight = spatial * exp(-dot(diff, diff) * uEdge);
 这在 CPU 上同样成立：可分离 5-tap 两轮 = 20 次乘加/像素，比我们双边的 25 次采样
 + 25 次颜色距离计算便宜得多。
 
-### 7.5 wtnl-zhi / iesv：把检测挪出渲染线程
 
 双 staging surface + 工作线程只保留最新帧，渲染端**不等**推理结果。
 我们的检测尖峰 14.6 ms（每 4 帧一次）正是靠这个抹平的。
@@ -306,7 +269,6 @@ float weight = spatial * exp(-dot(diff, diff) * uEdge);
 | 5 | 检测异步化 | 尖峰抹平 | 中 | 7.5 |
 
 **事实 vs 推测**：7.2~7.5 的分辨率、核大小、采样次数、权重与源码位置均来自
-`/tmp/lumina/LmPipeline.cpp`（1301 行）与 `09_开源参考/MIT_wuxiwuhen_beauty_filter.effect.txt`
 （158 行）的实际内容，可复核。第 1、2、4 项的收益是**推算，未实测** —— 尤其第 2 项
 （半分辨率磨皮）需要先确认「半分辨率磨出来的皮肤在半分辨率上被放大回全分辨率后
 不会出现软边」，这一点所有仓库都是 GPU 双线性上采样，我们 CPU 侧要另写。
@@ -329,7 +291,6 @@ float weight = spatial * exp(-dot(diff, diff) * uEdge);
    现有路线本来就在减少平台边。
 2. **第 1 项应该排在第 2 项（半分辨率）之后**，而不是之前。§7.3 的推论在
    r=2 的核上不成立 —— 减掉 17px 尺度的参照后，判据被改写而不是被修正，
-   保边强度反而下降。lumina 能用是因为它等效半径约 12px。
 
 所以 §7.6 的落地顺序应改成：**2 → 5 → 4 →（再回来评估 1/3）**。
 
@@ -340,9 +301,7 @@ float weight = spatial * exp(-dot(diff, diff) * uEdge);
 §7 全是**空间**口径（核多大、在哪算）。这一节补**时间**口径 —— 我们被「掩码拖影」卡了
 两版（3.1.8 压滞后、3.1.9 软化边界），而三个仓库里只有一个真的处理过这件事。
 
-### 8.1 wtnl-zhi 的 `face_tracker.c`：它为什么要 EMA
 
-源码结构（GPL-2.0，**只读思路，未抄代码**）：
 
 ```c
 struct beauty_face_observation {   // 观测：归一化到 0..1
@@ -367,7 +326,6 @@ init(tracker, smoothing, stale_after_ns);   // smoothing clamp 0.01 ~ 1.0
 50~70ms —— 拿"抖动"换"拖影"，方向完全反了。**这就是 3.1.9 不做人脸框平滑的理由，
 不是没想到。**
 
-### 8.2 wtnl-zhi 的 `beauty.effect`：`mask_feather` 怎么用的
 
 ```glsl
 float feather = clamp(mask_feather, 0.01, 0.30);          // UI 默认 12%
@@ -386,7 +344,6 @@ return valid * (1.0 - smoothstep(1.0 - feather,
    歪头时框会变大（外接矩形），羽化边也跟着变大 —— 观感上比旋转椭圆差一点，但不至于
    出硬边。**留着，等真机有歪头场景再说。**
 
-### 8.3 lumina：不跟滞后较劲，让掩码**形状**贴着脸
 
 `LmFace.cpp` 里没有任何时序代码（没有 `prev`、没有 `lerp`、没有时间戳）。它做的是从
 MediaPipe 468 点里取下巴/下颌/颧骨/眉毛等关键点，生成一堆**局部椭圆区域**：
@@ -414,7 +371,5 @@ AddRegion(regions, center, axis, majorRadius, ...);   // 椭圆 + 主轴 + 半�
 | 468 点关键点 → 贴脸椭圆 | ❌ 不换路线 | 换掉「肤色 ∩ 框」会丢掉已标定的脖子覆盖 |
 
 **事实 vs 推测**：§8.1/8.2/8.3 的字段名、clamp 范围、公式、默认值均来自
-`wtnl-zhi/obs-beauty-filter` 的 `src/face_tracker.c` / `data/beauty.effect` 与
-`dinjufen/lumina-beauty` 的 `src/engine/LmFace.cpp` 实际内容（2026-10-28 抓取），可复核。
 「它默认档 10fps / 256px」来自它的 `quality_mode` 设置项，**没有实测它的实际帧率**；
 「我们叠 EMA 会把 33ms 变成 50~70ms」是按 α 与帧率的推算，**未实测**。

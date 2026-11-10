@@ -1,5 +1,3 @@
-// face_probe —— 验证自研 YuNet 检测（离线工具，不进插件）
-// 用法：face_probe.exe <model.onnx> <rgba.raw> <w> <h>
 
 #include "beauty_face.h"
 

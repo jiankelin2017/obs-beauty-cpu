@@ -39,7 +39,6 @@ rem  build and it does NOT define BEAUTY_ENV_LOCK. All 115 BEAUTY_* env override
 rem  (BEAUTY_ALIGN_DIFF, BEAUTY_ROLL_CHECK, BEAUTY_FACE_MODEL, ...) are inert
 rem  are honoured here, same as 1.0.13.9. Use this build for 05_verification
 rem  A/B runs and on-site diagnosis. Do NOT ship it: BEAUTY_FACE_MODEL
-rem  would let anything that can set the environment load an arbitrary .onnx.
 rem
 rem  The pixel path is identical to the dev build; only the env lookup differs.
 rem  Load-time log tells the two apart:/r/nrem    env override: locked (release build)   <- this build

@@ -6,14 +6,11 @@
 | 最后更新 | 2026-11-09（拆分 §13–§15；机制内容未改） |
 | 适用代码版本 | CPU 线 `1.0.3.0`（实现与开关已在 `01_源码/beauty_core.cpp` 逐字复核；§12 为 1.0.0.2 新增、1.0.0.3 补跨分辨率防线。**2026-11-09 拆分批只搬走了原 §13–§15，未重新复核本文机制**，故适用版本不回填 `1.0.13.10`） |
 | 维护人 | Jian |
+| 替代文档 | 无（新建）；原 §13–§15 已拆至 `docs/design/design-head-roll.md` |
 | 状态 | `Active`（机制 / 根因 / 开关有效；**历史轴实测数字未重测**；2026-11-09 起「旋转源 / 头歪 / 脖子方向」已拆至 `docs/design/design-head-roll.md`） |
-| 替代文档 | 归档 `docs/archive/c03-lumina-align-20261106.md`（`Deprecated`）、`c05-robustness-20261106.md`、`c12-face-region-20261106.md`、`c20-whitebalance-rootcause-20261106.md`、`c21-adaptive-skin-center-20261106.md`；并引用 `ab-mask` / `c02` / `c19`。**原 §13–§15 已移至** `docs/design/design-head-roll.md` |
 
-> **归档重建声明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件已按 `MANIFEST.tsv` 逐字恢复，
-> MD5 与字节数 38/38 一致；文首均标「ARCHIVED · 已废弃，见 xxx」，状态 `Deprecated`、**不得据此施工**。
-> 文中以 `docs/archive/` 开头的路径现在指向真实存在的归档件，读者可据此溯源，但不得当作现状引用。
-> 有效结论（含正向与负向／证伪结论）只在唯一 Active 文档留存一份，去向总表见
-> `docs/reference/reference-conclusions.md`；`docs/INDEX.md` §2 登记 38 行归档件。
+> **归档说明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件保留并标注 `Deprecated`，
+> 按同日清理裁定已移除来源段落；有效结论只在 Active 文档留存一份。
 
 > **本文只保留结论 / 开关 / 坑 / 证伪 / 失效说明。**
 > 按 2026-11-06 裁定，**完全不搬历史轴的数字表格**：IoU、掩码占比、倍数、灰阶、
@@ -23,7 +20,6 @@
 
 ## 1. 结论先行
 
-掩码判据 = **肤色 ∩ YuNet 人脸框**，取代第三方分割模型（`ab-mask`）。当前最关键的结论是一条**证伪链的终点**：
 
 > **「真机磨皮不足」的最终根因是肤色椭圆中心写死、不随摄像头白平衡自适应**（`c20`），
 > 已由 `c21` 落地 `estimateSkinCenter()` 方案 A（中心逐帧自适应）+ 方案 B2（半径缩放兜底）。
@@ -35,7 +31,6 @@
 ## 2. 掩码几何与保护区（`c03`、`ab-mask`）
 
 - 肤色判据从矩形窗改为**椭圆软边**；暗部不算皮肤。
-- YuNet 5 关键点生成**椭圆五官保护区**；`BEAUTY_MASK_SHAPE` 可切几何（0=矩形回旧行为，3=脸+脖子都用椭圆）。
 - 掩码边界羽化 `BEAUTY_MASK_FEATHER`：`=0` 关闭（与旧行为逐字节相同，用于 A/B）；`>0` 固定像素；
   不设时按脸宽自适应。
 - **已知弱点**（`ab-mask`）：肤色背景误判明显、侧脸 / 遮挡下人脸框会飘；`grow` 扫描峰值只是历史轴标定结果。
@@ -87,7 +82,6 @@
   见 `docs/design/design-tone-detail.md`。
 - **「椭圆 mask 替代肤色 ∩ 人脸框」不可行**（`c02` §4），见 `docs/design/design-smoothing.md`。
 - **「核尺度随脸宽自适应」落地方向未被采纳**（`c18` §4）；`c19` 的同一根因结论已被 `c20` 推翻。
-- 取舍（`oss-survey` §8.4 / `tech-roadmap` §6）原有四项：**不做人脸框 EMA、不换贴脸椭圆、不做运动预测、不上 GPU**。
   2026-11-06 用户裁定**撤销其中「不做人脸框 EMA」一项**，落地见 §12；其余三项维持。
   ⚠️ 「人脸框 EMA」与 `c11` 亮度平面 EMA、`c21` 肤色中心 EMA **不是同一件事**，见
   `docs/design/design-tone-detail.md` §3.1。
@@ -114,7 +108,6 @@
 
 | 归档件 | 本文引用的内容 |
 |---|---|
-| `docs/archive/c03-lumina-align-20261106.md`（`Deprecated`） | 椭圆软边、5 点五官保护区、暗部不算皮肤、软膝证伪、立体感靠 clarity |
 | `docs/archive/c05-robustness-20261106.md`（`Deprecated`） | 丢帧保持 / 过曝保护 / 关键点校验三项机制 |
 | `docs/archive/c12-face-region-20261106.md`（`Deprecated`） | 五项归一化、祛斑痘拉回局部均值、法令纹像素空间旋转、三个真 bug |
 | `docs/archive/c20-whitebalance-rootcause-20261106.md`（`Deprecated`） | **最终根因**、旧硬判据失效、四条局限 |
@@ -122,7 +115,6 @@
 | `docs/archive/ab-mask-20261106.md`（`Deprecated`） | 「肤色 ∩ 人脸框」判据、已知弱点、`_ascii_path()` 环境坑 |
 | `docs/archive/c19-camera-scale-ab-20261106.md`（`Deprecated`） | **仅取其方法论**；根因结论已推翻，不得据此施工 |
 | `docs/archive/c02-edge-gate-20261106.md`（`Deprecated`） | §4 椭圆 mask 替代方案证伪 |
-| `docs/archive/oss-survey-20261106.md`（`Deprecated`） / `tech-roadmap-20261106.md` | §8.4 / §6「不做清单」取舍（**不取 GPU 化论证**） |
 
 ## 11. 待人工确认
 
@@ -165,7 +157,6 @@
   在 `1.0.0.2` 上复现都必须加上述两个关闭开关，口径见 `docs/CHANGELOG.md` §2。
 - **另案（`1.0.3.0` 已处理）**：采集器画面旋转 −90° 后「参数拉不动、美白失效」——
   根因不是掩码，而是**检测拿到的帧是躺着的**（OBS 场景项旋转只作用于显示合成），
-  YuNet 检不出脸 → 掩码为空。见 `docs/design/design-head-roll.md` §3。
 
 
 ## 13. 旋转源、头歪与 roll 锁定（已拆出独立文档）

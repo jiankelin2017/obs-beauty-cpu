@@ -9,11 +9,8 @@
 | 状态 | `Active`（架构 / 开关有效；**历史轴实测数字未重测**） |
 | 替代文档 | 重写前全文见 `docs/archive/c1-cpu-performance-20261106.md`（`Deprecated`）；异步检测结论见本文 §8（原 `docs/archive/c10-async-detect-20261106.md`，`Deprecated`） |
 
-> **归档重建声明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件已按 `MANIFEST.tsv` 逐字恢复，
-> MD5 与字节数 38/38 一致；文首均标「ARCHIVED · 已废弃，见 xxx」，状态 `Deprecated`、**不得据此施工**。
-> 文中以 `docs/archive/` 开头的路径现在指向真实存在的归档件，读者可据此溯源，但不得当作现状引用。
-> 有效结论（含正向与负向／证伪结论）只在唯一 Active 文档留存一份，去向总表见
-> `docs/reference/reference-conclusions.md`；`docs/INDEX.md` §2 登记 38 行归档件。
+> **归档说明（2026-11-10）**：`docs/archive/` 下 38 篇历史原件保留并标注 `Deprecated`，
+> 按同日清理裁定已移除来源段落；有效结论只在 Active 文档留存一份。
 
 > **本文只保留结论 / 开关 / 坑 / 证伪 / 失效说明。**
 > 按 2026-11-06 裁定，**完全不搬历史轴数字表格**：耗时、加速比、预算余量、SHA256、
@@ -270,9 +267,6 @@
 
 事实链：
 
-1. 我们用的 `yunet_2023mar.onnx` **把输入声明成固定 `640×640`**。
-2. ONNX Runtime 严格按声明校验，喂 320 直接报 `Got invalid dimensions for input: ... Expected: 640`。
-3. ⚠️ **OpenCV 却能跑 320**，原因是 cv2.dnn 的引擎不认模型声明的固定维度、会自己重做 shape 推断 —— 那是 OpenCV 的行为，**不是模型的能力**。照 OpenCV 的表现去推断「模型支持动态输入」会踩坑。
 4. 想真正降分辨率只有两条路：换原生动态导出的模型，或改 ONNX 的 `dim_param` 再重做 shape 推断；后者风险高 —— 网络内部的 `Reshape` 依赖具体尺寸。
 
 **替代方案**：检测提速改走「推理多线程」`kInferThreads`，而不是降分辨率；不给满线程数是因为 OBS 的编码线程通常要占核，全占会掉帧。
@@ -280,7 +274,6 @@
 
 ### 3.2 GPU 化推算已废止
 
-- 历史轴曾为「是否 GPU 化」做过相对优势推算，见 `docs/archive/oss-survey-20261106.md`（`Deprecated`） §0–3、§5；该件以 GPU 化为论证目标，与当前「纯 CPU、不引入自定义 shader / GPU 计算管线」方向冲突，**不得据此施工或改回 GPU 路线**（第 3 批已补注有效性边界）。
 - 其中**唯一仍成立**的是盲区提示：引擎层计时不含插件层 `gs_stagesurface_map` 下载与 `gs_texture_set_image` 上传往返；该开销在 CPU `1.0.0.0` 上**同样未实测**（待人工确认）。
 - `BEAUTY_PROFILE=1` 埋点在当前源码仍存在（`01_源码/obs-beauty.cpp` 的性能埋点初始化与日志输出两处），但尚未在 CPU 版本轴上取数。
 
@@ -384,8 +377,6 @@ python core_vs_sdk.py       # 画质回归（对拍 SDK 曲线）
 
 **失效信息**（历史轴，不得据此施工）：`3.1.40 / core 1.4.1` 版本号、`02_构建\build_3.1.40\` 与
 `03_装机\install_3.1.40.bat` 的「未装机」状态、GPU 版 `3.1.76` 编号（GPU 版当前为独立轴 `3.0.1`）、
-`06_离线验证\` 旧目录编号、§7 对 `04_文档/开源参考仓库_对照与可复用清单.md` 的旧路径引用
-（已归档为 `docs/archive/oss-survey-20261106.md`（`Deprecated`））、以及全部未在 CPU `1.0.0.0` 重测的毫秒数 / 加速比 / SHA256。
 
 **本批变更**（第 5 批 · 单独清理）：按第 4B 批 4 份 `design-*.md` 的同一口径整篇重写，
 删除 §0 两张加速比表、§1 数据更正流水账、§2 / §3 / §4 / §6 的历史收益与推算数字、
@@ -394,4 +385,3 @@ python core_vs_sdk.py       # 画质回归（对拍 SDK 曲线）
 **归档映射**：`04_文档\C1_CPU性能优化.md` → `docs/design/design-cpu-performance.md`（首批迁入）
 → 本批重写前全文（含附录 A / B）已随原件删除，未在本仓库留存。
 另已合并 `docs/archive/readme-entry-20261106.md`（`Deprecated`） §8 口径、`docs/archive/c10-async-detect-20261106.md`（`Deprecated`）（§8）、
-`docs/archive/oss-survey-20261106.md`（`Deprecated`） §3 有效性边界。归档件状态 `Deprecated`，标「不得据此施工」。

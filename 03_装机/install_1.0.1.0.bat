@@ -15,14 +15,9 @@ rem  log line at all (see docs/guides/guide-ui.md section 3).
 rem
 rem  Layout installed:
 rem    ...\plugins\obs-beauty\bin\64bit\obs-beauty.dll
-rem    ...\plugins\obs-beauty\bin\64bit\onnxruntime.dll
-rem    ...\plugins\obs-beauty\bin\64bit\models\yunet.onnx
 rem    ...\plugins\obs-beauty-ui\bin\64bit\obs-beauty-ui.dll
 rem
 rem  The engine resolves the model relative to its OWN dll directory:
-rem  <dll-dir>\models\yunet.onnx, falling back to <dll-dir>\yunet.onnx, and
-rem  loads <dll-dir>\onnxruntime.dll (ORT API 20 / 1.20.x required).
-rem  See beauty_core.cpp ensureReady() and beauty_onnx.cpp.
 rem
 rem  No UAC elevation is needed for a FRESH install: ProgramData\obs-studio\plugins
 rem  grants BUILTIN\Users Write (create), but the inherited ACE has no DELETE,

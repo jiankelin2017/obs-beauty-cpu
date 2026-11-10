@@ -7,7 +7,7 @@ import ctypes
 import os
 import sys
 
-ASSET_DIR = r"C:/Users/<user>/WorkBuddy AI/2026-10-24-14-50-29/legacy_e2e"
+ASSET_DIR = os.path.join(os.path.expanduser("~"), "WorkBuddy AI/2026-10-24-14-50-29/legacy_e2e")
 DLL = r"C:/legacy_e2e/legacy_engine_test.dll"
 IN_RAW = os.path.join(ASSET_DIR, "probe_in.raw")
 W, H = 640, 394

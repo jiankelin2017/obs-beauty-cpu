@@ -38,7 +38,7 @@ def detail(g):
 
 def main():
     files = sorted(glob.glob(
-        "C:/Users/<user>/.workbuddy/clipboard-images/clipboard-2026-10-25T14-25-26-*.jpg"))
+        os.path.join(os.path.expanduser("~"), ".workbuddy/clipboard-images/clipboard-2026-10-25T14-25-26-*.jpg")))
     print("%-14s %9s %9s %9s %9s" % ("file", "左颊", "右颊", "额头", "墙面"))
     for p in files:
         im = Image.open(p)

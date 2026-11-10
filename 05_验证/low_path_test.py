@@ -1,7 +1,6 @@
 # low_path_test.py —— 低频层三条路线的对照（浮点 / 低频参照 各自贡献多少）
 #
 # 背景：04_文档/开源参考仓库_对照与可复用清单.md §7
-#   lumina 的 kSkinBlurShader 把颜色差写成 (tap-center) - (refTap-refCenter)，
 #   即「只看局部起伏」。我们原来是绝对差 tap-center。
 #   同时它用 RGBA16F 存中间结果，我们原来压回 uint8。
 #

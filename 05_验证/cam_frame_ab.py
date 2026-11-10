@@ -39,7 +39,7 @@ ENGINE_DIR = RG.ENGINE_DIR
 TMP = os.path.join(HERE, 'goldens', 'masks')
 
 DEFAULT_SRC = os.path.join(
-    r'C:\Users\<user>\.workbuddy\clipboard-images',
+    os.path.join(os.path.expanduser("~"), ".workbuddy/clipboard-images"),
     'clipboard-2026-10-28T17-27-00-131Z-a93b903c.jpg')   # 自制0
 
 

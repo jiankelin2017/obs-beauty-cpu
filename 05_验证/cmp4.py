@@ -106,4 +106,4 @@ def main(paths):
 if __name__ == "__main__":
     args = sys.argv[1:]
     main(args if args else sorted(glob.glob(
-        "C:/Users/<user>/.workbuddy/clipboard-images/clipboard-2026-10-25T14-25-26-*.jpg")))
+        os.path.join(os.path.expanduser("~"), ".workbuddy/clipboard-images/clipboard-2026-10-25T14-25-26-*.jpg"))))

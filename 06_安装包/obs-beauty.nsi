@@ -3,8 +3,6 @@
 ;
 ;  装什么（4 个文件 + 文档 + 卸载器）：
 ;    obs-beauty.dll      = 滤镜本体（CPU 版，版本见 beauty_params.h）
-;    onnxruntime.dll     = 自研引擎运行时（必须与滤镜 DLL 同目录）
-;    models\yunet.onnx   = 人脸检测模型（必须落在 models\ 子目录）
 ;    obs-beauty-ui.dll   = 参数面板（ProgramData 下的插件目录）
 ;
 ;  版本轴：CPU 线四段式，唯一口径是 01_源码\beauty_params.h 的 BEAUTY_BUILD_STR，
@@ -13,7 +11,6 @@
 ;
 ;  装机口径（2026-11-07 按用户裁定 C-1 统一到 ProgramData）：
 ;    $OBSDIR = %ProgramData%\obs-studio\plugins\obs-beauty\bin\64bit
-;                 放 obs-beauty.dll / onnxruntime.dll / models\yunet.onnx
 ;    $UIDIR  = %ProgramData%\obs-studio\plugins\obs-beauty-ui\bin\64bit
 ;                 放 obs-beauty-ui.dll
 ;  旧口径 $OBSROOT\obs-plugins\64bit（扁平布局）已废弃：OBS 扫描全局插件时
@@ -23,7 +20,6 @@
 ;
 ;  为什么这几个位置不能改（见 04_文档\C13_装机链路.md §2）：
 ;    beauty_core.cpp 的 ensureReady() 用 selfDir()（= obs-beauty.dll 所在目录）
-;    解析 onnxruntime.dll 和 models\yunet.onnx。放到别处等于没装：
 ;    滤镜仍能加载，但人脸检测静默失效 → 磨皮退化成全帧。
 ;
 ;  不含 NamaSDK（约 97 MB 闭源件）：3.1.7 起默认引擎已切到 core，
@@ -265,8 +261,6 @@ Section "滤镜 + 自研引擎运行时" SecCore
   File /oname=obs-beauty.dll "${SRCDIR}\filter\obs-beauty.dll"
   DetailPrint "滤镜   -> $OBSDIR\obs-beauty.dll"
 
-  ; ---- ONNX Runtime -------------------------------------------------------
-  ; 必须与滤镜 DLL 同目录：ensureReady() 用 selfDir() + "\onnxruntime.dll"
   ${If} $BACKUP_ORIGIN == "external"
     ${IfNot} ${FileExists} "$INSTDIR\backup\onnxruntime.dll.bak"
       ${If} ${FileExists} "$OBSDIR\onnxruntime.dll"
@@ -278,7 +272,6 @@ Section "滤镜 + 自研引擎运行时" SecCore
   File /oname=onnxruntime.dll "${SRCDIR}\core\onnxruntime.dll"
   DetailPrint "运行时 -> $OBSDIR\onnxruntime.dll"
 
-  ; ---- YuNet 模型 ---------------------------------------------------------
   ; models 目录是不是本包建的，卸载时决定要不要删（只删空目录）
   ${If} ${FileExists} "$OBSDIR\models"
     ; 目录本来就有：可能是旧包装的（旧包 ModelsCreated=1），继承它的标记
@@ -430,7 +423,6 @@ Section "Uninstall"
     DetailPrint "已删除 obs-beauty.dll"
   ${EndIf}
 
-  ; ---- 2) ONNX Runtime ---------------------------------------------------
   ${If} ${FileExists} "$INSTDIR\backup\onnxruntime.dll.bak"
     Delete "$OBSDIR\onnxruntime.dll"
     CopyFiles /SILENT "$INSTDIR\backup\onnxruntime.dll.bak" "$OBSDIR\onnxruntime.dll"
@@ -440,7 +432,6 @@ Section "Uninstall"
     DetailPrint "已删除 onnxruntime.dll"
   ${EndIf}
 
-  ; ---- 3) YuNet 模型 -----------------------------------------------------
   ${If} ${FileExists} "$INSTDIR\backup\yunet.onnx.bak"
     Delete "$OBSDIR\models\yunet.onnx"
     CopyFiles /SILENT "$INSTDIR\backup\yunet.onnx.bak" "$OBSDIR\models\yunet.onnx"

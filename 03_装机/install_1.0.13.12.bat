@@ -3,7 +3,6 @@ rem  install_1.0.13.12.bat - OVERWRITE the installed CPU filter + UI dll with 1.
 rem
 rem  1.0.13.12 changes the FILTER SOURCE (code-review fixes D1 / D2):
 rem    D1 removes a data race between the param thread and the render thread;
-rem    D2 handles two ignored ONNX Runtime status values and null handles.
 rem  The pixel path is unchanged, but the DLL bytes differ from 1.0.13.12.
 rem
 rem  Right-click -> "Run as administrator". This file CANNOT work without an
@@ -17,7 +16,6 @@ rem    2) copy obs-beauty.dll      -> ...\plugins\obs-beauty\bin\64bit\
 rem       copy obs-beauty-ui.dll   -> ...\plugins\obs-beauty-ui\bin\64bit\
 rem    3) print MD5 of both, so the caller can confirm which build is live
 rem
-rem  Only two files change. onnxruntime.dll and models\yunet.onnx stay as-is.
 rem  Keep this file PURE ASCII + CRLF: cmd.exe reads .bat as GBK.
 rem ===========================================================================
 setlocal enabledelayedexpansion

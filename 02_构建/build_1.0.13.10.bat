@@ -39,7 +39,6 @@ rem  build and it defines BEAUTY_ENV_LOCK=1. All 115 BEAUTY_* env overrides
 rem  (BEAUTY_ALIGN_DIFF, BEAUTY_ROLL_CHECK, BEAUTY_FACE_MODEL, ...) are inert
 rem  here: beauty_env() in beauty_env.h returns nullptr, so every call site
 rem  falls through to its default branch. BEAUTY_FACE_MODEL in particular can
-rem  no longer point the plugin at an arbitrary .onnx.
 rem
 rem  The pixel path is identical to the dev build; only the env lookup differs.
 rem  Load-time log tells the two apart:/r/nrem    env override: locked (release build)   <- this build

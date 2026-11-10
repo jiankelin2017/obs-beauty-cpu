@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath("."))
 import numpy as np
 from PIL import Image, ImageFilter
 
-THIRD = r"C:/Users/<user>/.workbuddy-ai/clipboard-images/clipboard-2026-10-25T06-17-22-186Z-4f596de6.jpg"
+THIRD = os.path.join(os.path.expanduser("~"), ".workbuddy-ai/clipboard-images/clipboard-2026-10-25T06-17-22-186Z-4f596de6.jpg")
 CROP  = (0, 30, 1140, 713)      # 预览区（右侧面板与底部黑边已切掉）
 
 def skin_mask(a):
@@ -27,7 +27,6 @@ def bands(a, m):
     return dict(Y=float(Y[m].mean()), Cr=float(Cr[m].mean()),
                 hf=std_of(a - b1), mid=std_of(b1 - b3), low=std_of(b3 - b7))
 
-# ---- 第三方 ----
 th = np.asarray(Image.open(THIRD).convert("RGB").crop(CROP)).astype(np.float32)
 H, W, _ = th.shape
 box = np.zeros((H, W), bool); box[20:600, 340:860] = True     # 人脸大致范围，排除木柜

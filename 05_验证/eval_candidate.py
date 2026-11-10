@@ -8,6 +8,9 @@ import glob
 import os
 import sys
 
+PY_EXE = os.path.join(os.path.expanduser("~"),
+                      "AppData/Local/Programs/Python/Python312/python.exe")
+
 import numpy as np
 
 sys.path.insert(0, os.path.abspath("."))
@@ -50,8 +53,7 @@ def main():
     for tag in ("fast", "mid", "slow"):
         files = sorted(glob.glob("mask_dump_*.raw"))
         # 形变序列的转储在 sweep_*_out 运行之后已经不在了，现场重跑
-        os.system(r'"C:\Users\<user>\AppData\Local\Programs\Python\Python312\python.exe"'
-                  r' lag_one.py %s > NUL 2>&1' % tag)
+        os.system(f'"{PY_EXE}" lag_one.py {tag} > NUL 2>&1')
         raws, actual = load_seq(tag)
         sraw = [soften(r) for r in raws]
         deform[tag] = (raws, sraw, actual)
@@ -68,8 +70,7 @@ def main():
     print("\n== 噪声三档：输出掩码帧间残差（级，越小越不闪）==")
     for amp in (2, 5, 12):
         files = sorted(glob.glob("mask_dump_*.raw"))
-        os.system(r'"C:\Users\<user>\AppData\Local\Programs\Python\Python312\python.exe"'
-                  r' floor_one.py %d > NUL 2>&1' % amp)
+        os.system(f'"{PY_EXE}" floor_one.py {amp} > NUL 2>&1')
         raws, actual = load_seq("n%d" % amp)
         line = ["  ±%-2d" % amp]
         for name, lo, hi, elo, ehi in CANDS:

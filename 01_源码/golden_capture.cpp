@@ -3,10 +3,8 @@
 // 离线工具版本：v1.1（2026-10-30）
 //   v1.0 = 无显式版本标记的基线采集工具（goldens / goldens_legacy 均由它采出）。
 //   v1.1 = 新增 blur_type<0「不下发」诊断分支（配合 legacy_engine.cpp 的守卫），
-//          用于实测参考实现在不显式设置 blur_type 时 bundle 默认落在哪一档。
 //          产品插件 obs-beauty.dll 路径不受影响，版本仍为 3.1.16、无需重装机。
 //
-// 用途：趁参考实现还在手上，把它的输出固化成回归集，供自研引擎逐档对拍。
 // 只编译进**离线验证 DLL**，不进 OBS 插件 DLL（build_manual.bat 不含本文件）。
 //
 // 与既有 LegacySelfTest 的差别：LegacySelfTest 只能传 blur / whiten 两项，
@@ -136,10 +134,8 @@ __declspec(dllexport) int __stdcall RefGoldenRun(
     return 0;
 }
 
-// 把当前帧的参考实现皮肤分割掩码落盘，供 S1「换掩码」离线对拍用。
 //
 // 文件格式：8 字节小端头部（int32 mw, int32 mh）+ mw*mh 字节掩码（0..255）。
-// 拿不到掩码（参考实现不可用 / 未检出）时返回 4，不写文件。
 __declspec(dllexport) int __stdcall BeautyDumpMask(
     const char* engineDir, const char* rawIn, int width, int height,
     const char* outMask, char* msgBuf, int msgCap) {

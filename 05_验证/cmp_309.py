@@ -4,11 +4,12 @@
 脸宽不同（自制 255 px / 第三方 210 px），固定像素带宽会失真，
 因此同时给三种口径：原生、归一到 210（只缩不放）、归一到 400。
 """
+import os
 import numpy as np
 from PIL import Image, ImageFilter
 
-OURS = r"C:\Users\<user>\.workbuddy-ai\clipboard-images\clipboard-2026-10-25T08-55-18-506Z-2220bebf.jpg"
-THRD = r"C:\Users\<user>\.workbuddy-ai\clipboard-images\clipboard-2026-10-25T08-55-18-507Z-7ed7adbf.jpg"
+OURS = os.path.join(os.path.expanduser("~"), ".workbuddy-ai/clipboard-images/clipboard-2026-10-25T08-55-18-506Z-2220bebf.jpg")
+THRD = os.path.join(os.path.expanduser("~"), ".workbuddy-ai/clipboard-images/clipboard-2026-10-25T08-55-18-507Z-7ed7adbf.jpg")
 BOX_O = (565, 195, 820, 430)
 BOX_T = (440, 190, 650, 400)
 

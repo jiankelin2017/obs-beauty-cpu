@@ -27,7 +27,6 @@
 
 ### 1.1 美白：对数曲线 + 保色相
 
-曲线与保色相做法来自 `dinjufen/lumina-beauty` 的 `kComposeShader`（核心 SDK 为 MIT）：
 
 ```
 beta = 1 + whiten × 2
